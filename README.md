@@ -32,3 +32,9 @@ To remove Gershwin installed from sources run the following:
 ```
 sudo make uninstall
 ```
+
+Then run the following as a regular user or source in shell profile:
+
+```
+. /System/Library/Makefiles/GNUstep.sh
+```

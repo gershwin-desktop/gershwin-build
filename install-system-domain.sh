@@ -70,8 +70,3 @@ cd "$REPOS_DIR/gershwin-systempreferences"
 $MAKE_CMD
 $MAKE_CMD install
 $MAKE_CMD clean
-
-cd "$REPOS_DIR/gershwin-rik-theme"
-$MAKE_CMD
-$MAKE_CMD install
-$MAKE_CMD clean

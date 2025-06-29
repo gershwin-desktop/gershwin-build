@@ -10,9 +10,6 @@ https://github.com/gershwin-desktop/libs-gui.git
 https://github.com/gnustep/libs-back.git
 https://github.com/gershwin-desktop/gershwin-workspace.git
 https://github.com/gershwin-desktop/gershwin-systempreferences.git
-https://github.com/gershwin-desktop/gershwin-globaldefaults.git
-https://github.com/gershwin-desktop/ghostbsd-gershwin-settings.git
-https://github.com/gershwin-desktop/gershwin-rik-theme.git
 "
 
 mkdir -p repos

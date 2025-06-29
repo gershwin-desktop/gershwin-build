@@ -13,7 +13,9 @@ export_vars
 export REPOS_DIR="$WORKDIR/repos"
 export NGSTEP_INSTALLATION_DOMAIN="SYSTEM"
 
-cd $WORKDIR && . GNUstep.conf
+mkdir -p /System/Library/Preferences
+cp $WORKDIR/GNUstep.conf /System/Library/Preferences
+. /System/Library/Preferences/GNUstep.conf
 
 cd "$REPOS_DIR/tools-make"
 ./configure \

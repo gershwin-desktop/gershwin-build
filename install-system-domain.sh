@@ -61,14 +61,3 @@ export fonts=no
 $MAKE_CMD -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean
-
-cd "$REPOS_DIR/gershwin-workspace"
-./configure
-$MAKE_CMD
-$MAKE_CMD install
-$MAKE_CMD clean
-
-cd "$REPOS_DIR/gershwin-systempreferences"
-$MAKE_CMD
-$MAKE_CMD install
-$MAKE_CMD clean

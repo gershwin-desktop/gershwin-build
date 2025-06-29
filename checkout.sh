@@ -12,7 +12,7 @@ https://github.com/gershwin-desktop/gershwin-workspace.git
 https://github.com/gershwin-desktop/gershwin-systempreferences.git
 https://github.com/gershwin-desktop/gershwin-globaldefaults.git
 https://github.com/gershwin-desktop/ghostbsd-gershwin-settings.git
--b mactinosh https://github.com/gershwin-desktop/gershwin-rik-theme.git
+https://github.com/gershwin-desktop/gershwin-rik-theme.git
 "
 
 mkdir -p repos

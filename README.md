@@ -38,3 +38,10 @@ Then run the following as a regular user or source in shell profile:
 ```
 . /System/Library/Makefiles/GNUstep.sh
 ```
+
+> Note for users of `sudo`: You can avoid having to constantly use `sudo -E` flag to install apps you build by putting the following files into your `sudoers.d` directory
+> ```
+> # on FreeBSD
+> sudo echo "Defaults env_keep += \"PATH GNUSTEP_MAKEFILES GNUSTEP_PATHS LD_LIBRARY_PATH DYLD_LIBRARY_PATH OBJC_RUNTIME OBJCFLAGS\"" > /usr/local/etc/sudoers.d/10_gershwin_env_keep
+> sudo echo "Defaults secure_path=\"/System/Library/Tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\"" > /usr/local/etc/sudoers.d/10_gershwin_secure_path
+> ```

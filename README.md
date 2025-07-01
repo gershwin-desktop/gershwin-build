@@ -38,6 +38,7 @@ Then run the following as a regular user or source in shell profile:
 ```
 . /System/Library/Makefiles/GNUstep.sh
 ```
+## Additional Notes
 
 > Note for users of `sudo`: You can avoid having to constantly use `sudo -E` flag to install apps you build by putting the following files into your `sudoers.d` directory
 > ```

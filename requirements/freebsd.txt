@@ -1,3 +1,4 @@
+libobjc2
 jpeg-turbo
 tiff
 png

@@ -4,7 +4,7 @@ This is intended for Gershwin developers only.  For more stable packaging with a
 
 ## Requirements
 
-* FreeBSD or Arch Linux
+* FreeBSD or Arch Linux (Arch requires libobjc2 installed with yay first)
 * sudo
 * git
 * xorg

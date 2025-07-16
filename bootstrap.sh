@@ -81,3 +81,42 @@ case "$OS_ID" in
     exit 1
     ;;
 esac
+
+# Install settings directory contents
+echo "Installing settings directory contents..."
+
+# Set PREFIX if not already set
+if [ -z "$PREFIX" ]; then
+    case "$OS_ID" in
+        freebsd)
+            PREFIX="/usr/local"
+            ;;
+        arch)
+            PREFIX="/usr"
+            ;;
+        *)
+            PREFIX="/usr/local"
+            ;;
+    esac
+fi
+
+echo "Using PREFIX: $PREFIX"
+
+# Dynamically install all subdirectories from settings/
+if [ -d "settings" ]; then
+    for dir in settings/*/; do
+        if [ -d "$dir" ]; then
+            # Extract directory name (bin, etc, share, etc.)
+            dirname=$(basename "$dir")
+            target_dir="$PREFIX/$dirname"
+            
+            echo "Installing $dirname directory to $target_dir/"
+            sudo mkdir -p "$target_dir"
+            sudo rsync -av "$dir" "$target_dir/"
+            sudo chown -R root:wheel "$target_dir"
+        fi
+    done
+    echo "Settings installation completed."
+else
+    echo "No settings directory found, skipping settings installation."
+fi

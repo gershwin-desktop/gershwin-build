@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Gershwin
+Comment=This session logs you into Gershwin
+Exec=/usr/local/bin/gershwin-x11
+TryExec=/usr/local/bin/gershwin-x11
+Type=Application

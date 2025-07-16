@@ -29,3 +29,7 @@ vala
 glib
 gobject-introspection
 gconf2
+rsync
+xfce4-wm
+xfce4-clipman
+xfce4-panel

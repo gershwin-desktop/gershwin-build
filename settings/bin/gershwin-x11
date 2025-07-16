@@ -1,0 +1,21 @@
+#!/bin/sh
+
+. /System/Library/Makefiles/GNUstep.sh
+
+# Start D-Bus session if not already running
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    eval "$(dbus-launch --sh-syntax --exit-with-x11)"
+fi
+
+# Launch window manager and panel in background
+xfwm4 &
+xfce4-panel &
+xfce4-clipman &
+# /usr/local/bin/networkmgr &
+openapp Dock
+
+# Optional: small delay to allow environment to settle
+sleep 2
+
+# Launch GWorkspace
+openapp GWorkspace

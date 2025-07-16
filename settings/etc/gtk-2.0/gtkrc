@@ -1,0 +1,2 @@
+include "/usr/local/share/themes/Vimix-Light/gtk-2.0/gtkrc"
+export GTK_MODULES=appmenu-gtk-module

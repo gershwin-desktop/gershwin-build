@@ -46,3 +46,7 @@ Then run the following as a regular user or source in shell profile:
 > sudo echo "Defaults env_keep += \"PATH GNUSTEP_MAKEFILES GNUSTEP_PATHS LD_LIBRARY_PATH DYLD_LIBRARY_PATH OBJC_RUNTIME OBJCFLAGS\"" > /usr/local/etc/sudoers.d/10_gershwin_env_keep
 > sudo echo "Defaults secure_path=\"/System/Library/Tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\"" > /usr/local/etc/sudoers.d/10_gershwin_secure_path
 > ```
+
+## TODO
+
+* MDNSresponder should be used but there is no pkg for arch and avahi has been removed (Port AUR functionilty from previous versions?)

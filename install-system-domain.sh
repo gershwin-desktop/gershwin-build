@@ -11,7 +11,7 @@ detect_platform
 export_vars
 
 export REPOS_DIR="$WORKDIR/repos"
-export NGSTEP_INSTALLATION_DOMAIN="SYSTEM"
+export GNUSTEP_INSTALLATION_DOMAIN="SYSTEM"
 
 mkdir -p /System/Library/Preferences
 cp $WORKDIR/GNUstep.conf /System/Library/Preferences
@@ -31,8 +31,29 @@ $MAKE_CMD distclean
 
 export GNUSTEP_INSTALLATION_DOMAIN="SYSTEM"
 
+
+echo "Building/installing libobjc2..."
+if [ -d "$REPOS_DIR/libobjc2/Build" ] ; then
+  rm -rf "$REPOS_DIR/libobjc2/Build"
+  mkdir -p "$REPOS_DIR/libobjc2/Build"
+else
+  mkdir -p "$REPOS_DIR/libobjc2/Build"
+fi
+
+cd "$REPOS_DIR/libobjc2/Build"
+
+cmake .. \
+  -DGNUSTEP_INSTALL_TYPE=SYSTEM \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_C_COMPILER=clang \
+  -DCMAKE_CXX_COMPILER=clang++ \
+  -DEMBEDDED_BLOCKS_RUNTIME=ON
+
+"$MAKE_CMD" || exit 1
+"$MAKE_CMD" install || exit 1
+
 cd "$REPOS_DIR/libs-base"
-./configure --with-installation-domain=SYSTEM
+./configure
 $MAKE_CMD -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean

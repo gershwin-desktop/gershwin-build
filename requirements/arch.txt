@@ -1,5 +1,4 @@
 base-devel
-gcc-objc
 clang
 libjpeg-turbo
 libtiff
@@ -25,16 +24,3 @@ giflib
 libao
 xorg-fonts-type1
 xorg-fonts-75dpi
-gtk2
-glib2
-gtk-chtheme
-glib2-devel
-gobject-introspection
-libwnck3
-meson
-ninja
-vala
-glib2-devel
-gobject-introspection
-libdbusmenu-gtk2
-appmenu-gtk-module

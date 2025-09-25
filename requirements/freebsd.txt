@@ -1,4 +1,3 @@
-libobjc2
 jpeg-turbo
 tiff
 png
@@ -10,7 +9,6 @@ libffi
 icu
 cairo
 libXft
-avahi-app
 flite
 libXt
 portaudio
@@ -20,12 +18,4 @@ openssl
 freeglut
 giflib
 libao
-gtk2
-gobject-introspection
-libwnck3
-meson
-ninja
-vala
-glib
-gobject-introspection
-gconf2
+xorg-fonts-truetype

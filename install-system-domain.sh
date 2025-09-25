@@ -74,3 +74,9 @@ $MAKE_CMD clean
 cd "$REPOS_DIR/gershwin-globaldefaults"
 mkdir -p /System/Library/Preferences/GlobalDefaults
 cp -R System/Library/Preferences/GlobalDefaults/* /System/Library/Preferences/GlobalDefaults/
+
+cd "$REPOS_DIR/gershwin-workspace"
+./configure
+$MAKE_CMD -j"$CPUS" || exit 1
+$MAKE_CMD install
+$MAKE_CMD clean

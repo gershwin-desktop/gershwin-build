@@ -80,3 +80,13 @@ cd "$REPOS_DIR/gershwin-workspace"
 $MAKE_CMD -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean
+
+cd "$REPOS_DIR/gershwin-systempreferences"
+$MAKE_CMD -j"$CPUS" || exit 1
+$MAKE_CMD install
+$MAKE_CMD clean
+
+cd "$REPOS_DIR/gershwin-rik-theme"
+$MAKE_CMD -j"$CPUS" || exit 1
+$MAKE_CMD install
+$MAKE_CMD clean

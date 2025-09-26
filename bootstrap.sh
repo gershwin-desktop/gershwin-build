@@ -46,18 +46,6 @@ case "$OS_ID" in
     else
       echo "All required packages are already installed."
     fi
-
-        # Ensure yay is installed
-    if ! command -v yay >/dev/null 2>&1; then
-      echo "yay not found — installing..."
-      git clone https://aur.archlinux.org/yay.git &&
-      cd yay &&
-      makepkg -si --noconfirm &&
-      cd .. &&
-      rm -rf yay
-    else
-      echo "yay is already installed."
-    fi
     ;;
 
   freebsd)
@@ -75,7 +63,7 @@ case "$OS_ID" in
       echo "All required packages are already installed."
     fi
     ;;
-    
+
   ghostbsd)
     while IFS= read -r pkg || [ -n "$pkg" ]; do
       [ -z "$pkg" ] && continue

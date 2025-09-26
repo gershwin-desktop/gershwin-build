@@ -9,14 +9,17 @@ detect_platform() {
             MAKE_CMD="gmake"
             NPROC_CMD="sysctl -n hw.ncpu"
             ;;
+        GhostBSD)
+            PLATFORM="ghostbsd"
+            MAKE_CMD="gmake"
+            NPROC_CMD="sysctl -n hw.ncpu"
+            ;;
         Linux)
             if [ -f /etc/arch-release ]; then
                 PLATFORM="arch"
-            else
-                PLATFORM="linux"
+                MAKE_CMD="make"
+                NPROC_CMD="nproc"
             fi
-            MAKE_CMD="make"
-            NPROC_CMD="nproc"
             ;;
         *)
             echo "Unsupported OS: $OS"

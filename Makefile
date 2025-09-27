@@ -7,8 +7,8 @@ check_root:
 install: system
 
 system: check_root
-	@if [ -d "/System" ]; then \
-		echo "GNUstep System Domain appears to be already installed."; \
+	@if [ -d "/System/Library" ]; then \
+		echo "Gershwin System Domain appears to be already installed."; \
 	else \
 		echo "Installing GNUstep System Domain..."; \
 		FROM_MAKEFILE=1 sh ./install-system-domain.sh; \
@@ -16,8 +16,8 @@ system: check_root
 
 uninstall: check_root
 	@removed=""; \
-	if [ -d "/System" ]; then \
-	  rm -rf /System; \
+	if [ -d "/System/Library" ]; then \
+	  rm -rf /System >/dev/null 2>&1 || true; \
 	  removed="$$removed /System"; \
 	  echo "Removed GNUstep System Domain /System"; \
 	fi; \

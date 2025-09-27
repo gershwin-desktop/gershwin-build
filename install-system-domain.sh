@@ -19,8 +19,8 @@ cp $WORKDIR/GNUstep.conf /System/Library/Preferences
 
 cd "$REPOS_DIR/tools-make"
 ./configure \
-  --enable-importing-config-file \
   --with-config-file=/System/Library/Preferences/GNUstep.conf \
+  --with-layout=gershwin \
   --with-library-combo=ng-gnu-gnu
 $MAKE_CMD || exit 1
 $MAKE_CMD install

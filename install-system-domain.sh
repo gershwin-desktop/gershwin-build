@@ -13,10 +13,6 @@ export_vars
 export REPOS_DIR="$WORKDIR/repos"
 export GNUSTEP_INSTALLATION_DOMAIN="SYSTEM"
 
-mkdir -p /System/Library/Preferences
-cp $WORKDIR/GNUstep.conf /System/Library/Preferences
-. /System/Library/Preferences/GNUstep.conf
-
 cd "$REPOS_DIR/tools-make"
 ./configure \
   --with-config-file=/System/Library/Preferences/GNUstep.conf \

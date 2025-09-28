@@ -24,6 +24,14 @@ build_freebsd_14_amd64_task:
     - ./checkout.sh
   build_script:
     - make install
+  package_script:
+    - mkdir -p artifacts/FreeBSD/14/amd64
+    - tar -C / -cJf artifacts/FreeBSD/14/amd64/system.txz /System
+  publish_script:
+    - cd artifacts/FreeBSD/14/amd64
+    - tree -h -D -C -H -./ --houtro=/dev/null -T 'Gershwin System for FreeBSD 14 amd64' ./ > ./index.html
+  system_artifacts:
+    path: "artifacts/FreeBSD/14/amd64/**/*"
 
 build_archlinux_x86_64_task:
   container:
@@ -40,3 +48,11 @@ build_archlinux_x86_64_task:
     - ./checkout.sh
   build_script:
     - make install
+  package_script:
+    - mkdir -p artifacts/ArchLinux/x86_64
+    - tar -C / -cJf artifacts/ArchLinux/x86_64/system.txz /System
+  publish_script:
+    - cd artifacts/ArchLinux/x86_64
+    - tree -h -D -C -H -./ --houtro=/dev/null -T 'Gershwin System for Arch Linux x86_64' ./ > ./index.html
+  system_artifacts:
+    path: "artifacts/ArchLinux/x86_64/**/*"

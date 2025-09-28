@@ -1,0 +1,19 @@
+# Cirrus CI configuration for FreeBSD 14.3
+freebsd_instance:
+  image: freebsd-14-3-release-amd64-ufs
+  cpu: 2
+  memory: 4G
+
+# Main build task
+build_task:
+  use_compute_credits: $CIRRUS_USER_COLLABORATOR == 'true'
+  name: "Build Gershwin System for FreeBSD:14:amd64"
+  alias: data
+
+  # Install dependencies
+  install_script:
+    - pkg update
+    - pkg install -y git-lite
+    - pkg install -y tree
+    - ./bootstrap.sh
+

@@ -5,7 +5,7 @@ This is intended for Gershwin developers only.  For more stable packaging with a
 ## Supported Operating Systems
 
 * FreeBSD
-* GhostBSD
+* GhostBSD (requires `sudo pkg install -g 'GhostBSD*-dev'`)
 * Arch Linux
 
 ## Requirements for building

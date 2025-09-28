@@ -47,7 +47,7 @@ sudo make uninstall
 
 ## Usage
 
-Then run the following as a regular user or source in shell profile:
+After making sure usage requirements are met the following should be run as regular user to start Gershwin after logging in:
 
 ```
 . /System/Library/Makefiles/GNUstep.sh

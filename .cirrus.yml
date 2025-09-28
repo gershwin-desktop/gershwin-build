@@ -4,7 +4,10 @@ freebsd_14_amd64_instance:
   memory: 4G
 
 build_freebsd_14_amd64_task:
-  freebsd_instance: freebsd_14_amd64_instance
+  freebsd_instance:
+    image: freebsd-14-3-release-amd64-ufs
+    cpu: 2
+    memory: 4G
   use_compute_credits: $CIRRUS_USER_COLLABORATOR == 'true'
   name: "Build Gershwin System for FreeBSD:14:amd64"
   alias: data
@@ -13,13 +16,11 @@ build_freebsd_14_amd64_task:
     - pkg install -y git tree
     - ./bootstrap.sh
 
-archlinux_x86_64_instance:
-  image: archlinux:latest
-  cpu: 2
-  memory: 4G
-
 build_archlinux_x86_64_task:
-  container: archlinux_x86_64_instance
+  container:
+    image: archlinux:latest
+    cpu: 2
+    memory: 4G
   use_compute_credits: $CIRRUS_USER_COLLABORATOR == 'true'
   name: "Build Gershwin System for Arch Linux (x86_64)"
   install_script:

@@ -1,15 +1,13 @@
-# Cirrus CI configuration for FreeBSD 14.3
 freebsd_14_amd64_instance:
   image: freebsd-14-3-release-amd64-ufs
   cpu: 2
   memory: 4G
 
 build_freebsd_14_amd64_task:
+  freebsd_instance: freebsd_14_amd64_instance
   use_compute_credits: $CIRRUS_USER_COLLABORATOR == 'true'
   name: "Build Gershwin System for FreeBSD:14:amd64"
   alias: data
-
-  # Install dependencies
   install_script:
     - pkg update
     - pkg install -y git tree
@@ -21,9 +19,10 @@ archlinux_x86_64_instance:
   memory: 4G
 
 build_archlinux_x86_64_task:
+  container: archlinux_x86_64_instance
   use_compute_credits: $CIRRUS_USER_COLLABORATOR == 'true'
   name: "Build Gershwin System for Arch Linux (x86_64)"
   install_script:
     - pacman -Syu --noconfirm
-    - pacman -S --noconfirm git tree
+    - pacman -S --noconfirm base-devel git tree
     - ./bootstrap.sh

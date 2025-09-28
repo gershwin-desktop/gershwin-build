@@ -49,6 +49,7 @@ Then run the following as a regular user or source in shell profile:
 
 ```
 . /System/Library/Makefiles/GNUstep.sh
+startx /System/Applications/GWorkspace.app/Gworkspace
 ```
 ## Additional Notes
 

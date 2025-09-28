@@ -34,5 +34,5 @@ build_archlinux_x86_64_task:
     - pacman -Syu --noconfirm
     - pacman -S --noconfirm base-devel git tree
     - ./bootstrap.sh
-    checkout_script:
+  checkout_script:
     - ./checkout.sh

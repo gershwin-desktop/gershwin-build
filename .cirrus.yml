@@ -22,6 +22,8 @@ build_freebsd_14_amd64_task:
     - ./bootstrap.sh
   checkout_script:
     - ./checkout.sh
+  build_script:
+    - make install
 
 build_archlinux_x86_64_task:
   container:
@@ -36,3 +38,5 @@ build_archlinux_x86_64_task:
     - ./bootstrap.sh
   checkout_script:
     - ./checkout.sh
+  build_script:
+    - make install

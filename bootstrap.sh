@@ -1,8 +1,8 @@
 #!/bin/sh
 
-# Prevent running as root
-if [ "$(id -u)" -eq 0 ]; then
-    echo "Do not run this script as root or with sudo."
+# Check if the script is run as root
+if [ "$(id -u)" -ne 0 ]; then
+    echo "This script must be run as root."
     exit 1
 fi
 
@@ -42,7 +42,7 @@ case "$OS_ID" in
 
     if [ -n "$missing" ]; then
       echo "Installing:$missing"
-      sudo pacman -S --noconfirm $missing
+      pacman -S --noconfirm $missing
     else
       echo "All required packages are already installed."
     fi
@@ -58,7 +58,7 @@ case "$OS_ID" in
 
     if [ -n "$missing" ]; then
       echo "Installing:$missing"
-      sudo pkg install -y $missing
+      pkg install -y $missing
     else
       echo "All required packages are already installed."
     fi
@@ -74,7 +74,7 @@ case "$OS_ID" in
 
     if [ -n "$missing" ]; then
       echo "Installing:$missing"
-      sudo pkg install -y $missing
+      pkg install -y $missing
     else
       echo "All required packages are already installed."
     fi

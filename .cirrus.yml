@@ -13,7 +13,18 @@ build_task:
   # Install dependencies
   install_script:
     - pkg update
-    - pkg install -y git-lite
-    - pkg install -y tree
+    - pkg install -y git treee
     - ./bootstrap.sh
 
+archlinux_instance:
+  image: archlinux:latest
+  cpu: 2
+  memory: 4G
+
+build_arch_task:
+  use_compute_credits: $CIRRUS_USER_COLLABORATOR == 'true'
+  name: "Build Gershwin System for Arch Linux AMD64"
+  install_script:
+    - pacman -Syu --noconfirm
+    - pacman -S --noconfirm git tree
+    - ./bootstrap.sh

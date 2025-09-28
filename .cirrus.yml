@@ -30,6 +30,10 @@ build_freebsd_14_amd64_task:
   publish_script:
     - cd artifacts/FreeBSD/14/amd64
     - tree -h -D -C -H -./ --houtro=/dev/null -T 'Gershwin System for FreeBSD 14 amd64' ./ > ./index.html
+    - echo "Branch-pinned URL:"
+    - echo "https://api.cirrus-ci.com/v1/artifact/github/${CIRRUS_REPO_OWNER}/${CIRRUS_REPO_NAME}/${CIRRUS_TASK_NAME}/artifacts/FreeBSD/14/amd64/index.html?branch=${CIRRUS_BRANCH}"
+    - echo "Commit-pinned URL:"
+    - echo "https://api.cirrus-ci.com/v1/artifact/github/${CIRRUS_REPO_OWNER}/${CIRRUS_REPO_NAME}/${CIRRUS_TASK_NAME}/artifacts/FreeBSD/14/amd64/index.html?sha=${CIRRUS_CHANGE_IN_REPO}"
   system_artifacts:
     path: "artifacts/FreeBSD/14/amd64/**/*"
 
@@ -54,5 +58,9 @@ build_archlinux_x86_64_task:
   publish_script:
     - cd artifacts/ArchLinux/x86_64
     - tree -h -D -C -H -./ --houtro=/dev/null -T 'Gershwin System for Arch Linux x86_64' ./ > ./index.html
+    - echo "Branch-pinned URL:"
+    - echo "https://api.cirrus-ci.com/v1/artifact/github/${CIRRUS_REPO_OWNER}/${CIRRUS_REPO_NAME}/${CIRRUS_TASK_NAME}/artifacts/ArchLinux/x86_64/index.html?branch=${CIRRUS_BRANCH}"
+    - echo "Commit-pinned URL:"
+    - echo "https://api.cirrus-ci.com/v1/artifact/github/${CIRRUS_REPO_OWNER}/${CIRRUS_REPO_NAME}/${CIRRUS_TASK_NAME}/artifacts/ArchLinux/x86_64/index.html?sha=${CIRRUS_CHANGE_IN_REPO}"
   system_artifacts:
     path: "artifacts/ArchLinux/x86_64/**/*"

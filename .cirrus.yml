@@ -3,6 +3,11 @@ freebsd_14_amd64_instance:
   cpu: 2
   memory: 4G
 
+archlinux_x86_64_instance: &archlinux_x86_64_instance
+  image: archlinux:latest
+  cpu: 2
+  memory: 4G
+
 build_freebsd_14_amd64_task:
   freebsd_instance:
     image: freebsd-14-3-release-amd64-ufs

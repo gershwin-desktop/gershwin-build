@@ -10,6 +10,7 @@ fi
 if [ -f /etc/os-release ]; then
     . /etc/os-release
     OS_ID="$ID"
+    OS_LIKE="$ID_LIKE"
 elif [ "$(uname -s)" = "FreeBSD" ]; then
     OS_ID="freebsd"
 else
@@ -43,6 +44,27 @@ case "$OS_ID" in
     if [ -n "$missing" ]; then
       echo "Installing:$missing"
       pacman -S --noconfirm $missing
+    else
+      echo "All required packages are already installed."
+    fi
+    ;;
+
+  debian)
+    while IFS= read -r pkg || [ -n "$pkg" ]; do
+      pkg="${pkg%%#*}"           # strip comments after #
+      pkg="$(echo "$pkg" | xargs)" # trim whitespace
+      [ -z "$pkg" ] && continue
+      if ! dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "install ok installed"; then
+        missing="$missing $pkg"
+      fi
+    done < "$REQUIREMENTS_FILE"
+
+    if [ -n "$missing" ]; then
+      echo "Missing packages:$missing"
+      echo "Updating apt cache..."
+      apt-get update -y
+      echo "Installing:$missing"
+      DEBIAN_FRONTEND=noninteractive apt-get install -y $missing
     else
       echo "All required packages are already installed."
     fi

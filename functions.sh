@@ -19,7 +19,7 @@ detect_platform() {
                 PLATFORM="arch"
                 MAKE_CMD="make"
                 NPROC_CMD="nproc"
-            elif  [ -f /etc/apt/sources.list ]; then
+            elif  [ -d /etc/apt ]; then
                 PLATFORM="debian"
                 MAKE_CMD="make"
                 NPROC_CMD="nproc"

@@ -7,8 +7,8 @@ icnsutils
 imagemagick
 libxml2-dev
 libxslt1-dev
-libgnutls30
-libgnutls30-dev
+libgnutls28
+libgnutls28-dev
 libffi-dev
 libicu-dev
 libcairo2-dev

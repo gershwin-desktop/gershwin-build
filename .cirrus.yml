@@ -64,3 +64,31 @@ build_archlinux_x86_64_task:
     - echo "https://api.cirrus-ci.com/v1/artifact/github/${CIRRUS_REPO_OWNER}/${CIRRUS_REPO_NAME}/${CIRRUS_TASK_NAME}/artifacts/ArchLinux/x86_64/index.html?sha=${CIRRUS_CHANGE_IN_REPO}"
   system_artifacts:
     path: "artifacts/ArchLinux/x86_64/**/*"
+
+build_debian_x86_64_task:
+  container:
+    image: debian:bookworm
+    cpu: 2
+    memory: 4G
+  use_compute_credits: $CIRRUS_USER_COLLABORATOR == 'true'
+  name: "Build Gershwin System for Debian (x86_64)"
+  install_script:
+    - apt-get update
+    - apt-get -y install git tree
+    - ./bootstrap.sh
+  checkout_script:
+    - ./checkout.sh
+  build_script:
+    - make install
+  package_script:
+    - mkdir -p artifacts/Debian/x86_64
+    - tar -C / -cJf artifacts/Debian/x86_64/system.txz /System
+  publish_script:
+    - cd artifacts/Debian/x86_64
+    - tree -h -D -C -H -./ --houtro=/dev/null -T 'Gershwin System for Debian x86_64' ./ > ./index.html
+    - echo "Branch-pinned URL:"
+    - echo "https://api.cirrus-ci.com/v1/artifact/github/${CIRRUS_REPO_OWNER}/${CIRRUS_REPO_NAME}/${CIRRUS_TASK_NAME}/artifacts/Debian/x86_64/index.html?branch=${CIRRUS_BRANCH}"
+    - echo "Commit-pinned URL:"
+    - echo "https://api.cirrus-ci.com/v1/artifact/github/${CIRRUS_REPO_OWNER}/${CIRRUS_REPO_NAME}/${CIRRUS_TASK_NAME}/artifacts/Debian/x86_64/index.html?sha=${CIRRUS_CHANGE_IN_REPO}"
+  system_artifacts:
+    path: "artifacts/Debian/x86_64/**/*"

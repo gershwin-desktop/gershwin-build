@@ -1,87 +1,38 @@
 #!/bin/sh
 
-set -eux
-
 # Detect platform and define tools accordingly
 detect_platform() {
-    # Detect OS_ID and OS_LIKE
-    OS_ID=""
-    OS_LIKE=""
-    
-    if [ -f /etc/os-release ]; then
-        # shellcheck disable=SC1091
-        . /etc/os-release
-        OS_ID=${ID:-}
-        OS_LIKE=${ID_LIKE:-}
-    else
-        case "$(uname -s)" in
-            FreeBSD)
-                OS_ID=freebsd
-                OS_LIKE=
-                ;;
-            *)
-                printf '%s\n' "Unsupported or unknown OS." >&2
-                exit 1
-                ;;
-        esac
-    fi
-    
-    printf 'Detected OS: %s\n' "$OS_ID"
-    
-    # Map OS_ID / OS_LIKE to PLATFORM, MAKE_CMD, NPROC_CMD
-    PLATFORM=""
-    MAKE_CMD=""
-    NPROC_CMD=""
-    
-    case "$OS_ID" in
-        freebsd|ghostbsd)
-            PLATFORM=$OS_ID
-            MAKE_CMD=gmake
-            NPROC_CMD='sysctl -n hw.ncpu'
+    OS=$(uname -s)
+    case "$OS" in
+        FreeBSD)
+            PLATFORM="freebsd"
+            MAKE_CMD="gmake"
+            NPROC_CMD="sysctl -n hw.ncpu"
             ;;
-        arch)
-            PLATFORM=arch
-            MAKE_CMD=make
-            NPROC_CMD=nproc
+        GhostBSD)
+            PLATFORM="ghostbsd"
+            MAKE_CMD="gmake"
+            NPROC_CMD="sysctl -n hw.ncpu"
             ;;
-        debian|ubuntu|linuxmint)
-            PLATFORM=debian
-            MAKE_CMD=make
-            NPROC_CMD=nproc
-            ;;
-        *)
-            if [ -n "$OS_LIKE" ]; then
-                case "$OS_LIKE" in
-                    debian*)
-                        PLATFORM=debian
-                        MAKE_CMD=make
-                        NPROC_CMD=nproc
-                        ;;
-                    arch*)
-                        PLATFORM=arch
-                        MAKE_CMD=make
-                        NPROC_CMD=nproc
-                        ;;
-                    freebsd*)
-                        PLATFORM=freebsd
-                        MAKE_CMD=gmake
-                        NPROC_CMD='sysctl -n hw.ncpu'
-                        ;;
-                    *)
-                        printf '%s\n' "Unsupported or unknown Linux distribution: $OS_ID (ID_LIKE=$OS_LIKE)" >&2
-                        exit 1
-                        ;;
-                esac
+        Linux)
+            if [ -f /etc/arch-release ]; then
+                PLATFORM="arch"
+                MAKE_CMD="make"
+                NPROC_CMD="nproc"
+            elif  [ -f /etc/apt/sources.list ]; then
+                PLATFORM="debian"
+                MAKE_CMD="make"
+                NPROC_CMD="nproc"
             else
-                printf '%s\n' "Unsupported or unknown OS: $OS_ID" >&2
+                echo "Unsupported Linux distribution"
                 exit 1
             fi
             ;;
+        *)
+            echo "Unsupported OS: $OS"
+            exit 1
+            ;;
     esac
-    
-    printf 'Platform: %s\n' "$PLATFORM"
-    printf 'Make command: %s\n' "$MAKE_CMD"
-    printf 'Nproc command: %s\n' "$NPROC_CMD"
 }
 
 # Determine CPU count for parallel builds

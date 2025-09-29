@@ -19,6 +19,13 @@ detect_platform() {
                 PLATFORM="arch"
                 MAKE_CMD="make"
                 NPROC_CMD="nproc"
+            elif  [ -f /etc/debian-release ]; then
+                PLATFORM="debian"
+                MAKE_CMD="make"
+                NPROC_CMD="nproc"
+            else
+                echo "Unsupported Linux distribution"
+                exit 1
             fi
             ;;
         *)

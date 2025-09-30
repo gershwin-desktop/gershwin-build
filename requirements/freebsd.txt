@@ -20,3 +20,6 @@ giflib
 libao
 xorg-fonts-truetype
 dbus
+libxcb
+xcb-util-cursor
+xcb-util

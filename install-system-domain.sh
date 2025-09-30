@@ -87,6 +87,11 @@ $MAKE_CMD -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean
 
+cd "$REPOS_DIR/gershwin-universe-apps/Terminal"
+$MAKE_CMD -j"$CPUS" || exit 1
+$MAKE_CMD install
+$MAKE_CMD clean
+
 cd "$REPOS_DIR/gershwin-universe-apps/TextEdit"
 $MAKE_CMD -j"$CPUS" || exit 1
 $MAKE_CMD install

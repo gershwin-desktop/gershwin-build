@@ -19,3 +19,4 @@ freeglut
 giflib
 libao
 xorg-fonts-truetype
+dbus

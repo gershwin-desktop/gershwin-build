@@ -28,3 +28,4 @@ dbus
 libxcb
 xcb-util-cursor
 xcb-util-wm
+wget

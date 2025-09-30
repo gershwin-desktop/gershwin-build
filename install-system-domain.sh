@@ -89,6 +89,7 @@ $MAKE_CMD clean
 
 cd "$REPOS_DIR/gershwin-universe-apps/Terminal"
 # On glibc based Linux systems, -liconv should not be used as iconv is part of glibc
+# TODO: Port this fix to GNUmakefile.preamble properly
 if [ $(uname) == "Linux" ] ; then
   sed -i -e 's|-liconv ||g' GNUmakefile.preamble
 fi

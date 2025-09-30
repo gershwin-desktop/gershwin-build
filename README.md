@@ -7,6 +7,7 @@ This is intended for Gershwin developers only.  For more stable packaging with a
 * FreeBSD
 * GhostBSD (requires `sudo pkg install -g 'GhostBSD*-dev'` for building)
 * Arch Linux
+* Debian
 
 ## Requirements for building
 

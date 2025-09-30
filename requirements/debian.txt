@@ -26,3 +26,6 @@ xfonts-75dpi
 xfonts-75dpi
 libc6-dev
 libdbus-1-dev
+libxcb1-dev
+libxcb-cursor-dev
+libxcb-ewmh-dev

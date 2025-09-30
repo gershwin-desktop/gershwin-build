@@ -24,3 +24,4 @@ giflib
 libao
 xorg-fonts-type1
 xorg-fonts-75dpi
+libiconv

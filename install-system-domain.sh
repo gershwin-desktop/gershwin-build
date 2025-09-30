@@ -88,6 +88,10 @@ $MAKE_CMD install
 $MAKE_CMD clean
 
 cd "$REPOS_DIR/gershwin-universe-apps/Terminal"
+# On glibc based Linux systems, -liconv should not be used as iconv is part of glibc
+if [ $(uname) == "Linux" ] ; then
+  sed -i -e 's|-liconv ||g' GNUmakefile.preamble
+fi
 $MAKE_CMD -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean

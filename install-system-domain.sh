@@ -92,8 +92,10 @@ cd "$REPOS_DIR/gershwin-universe-apps/Terminal"
 # TODO: Port this fix to GNUmakefile.preamble properly
 if [ "$(uname)" = "Linux" ] ; then
   sed -i -e 's|-liconv ||g' GNUmakefile.preamble
+  $MAKE_CMD CPPFLAGS="-D__GNU__" -j"$CPUS" || exit 1 # Do not include termio.h which is outdated
+else
+  $MAKE_CMD -j"$CPUS" || exit 1
 fi
-$MAKE_CMD -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean
 

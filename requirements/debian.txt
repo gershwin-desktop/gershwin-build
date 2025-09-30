@@ -24,3 +24,4 @@ libgif-dev
 libao-dev
 xfonts-75dpi
 xfonts-75dpi
+libc6-dev

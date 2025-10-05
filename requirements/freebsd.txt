@@ -13,7 +13,7 @@ flite
 libXt
 portaudio
 gmake
-cmake
+cmake-core
 openssl
 freeglut
 giflib

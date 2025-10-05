@@ -91,7 +91,7 @@ $MAKE_CMD -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean
 
-cd "$REPOS_DIR/gershwin-universe-apps/Terminal"
+cd "$REPOS_DIR/gershwin-terminal"
 # On glibc based Linux systems, -liconv should not be used as iconv is part of glibc
 # TODO: Port this fix to GNUmakefile.preamble properly
 if [ "$(uname)" = "Linux" ] ; then
@@ -103,7 +103,7 @@ fi
 $MAKE_CMD install
 $MAKE_CMD clean
 
-cd "$REPOS_DIR/gershwin-universe-apps/TextEdit"
+cd "$REPOS_DIR/gershwin-textedit"
 $MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean

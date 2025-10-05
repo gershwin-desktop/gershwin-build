@@ -13,6 +13,8 @@ https://github.com/gershwin-desktop/gershwin-workspace.git
 https://github.com/gershwin-desktop/gershwin-systempreferences.git
 https://github.com/gershwin-desktop/gershwin-rik-theme.git
 https://github.com/gershwin-desktop/gershwin-universe-apps.git
+https://github.com/gershwin-desktop/gershwin-terminal.git
+https://github.com/gershwin-desktop/gershwin-textedit.git
 https://github.com/gershwin-desktop/gershwin-dbuskit.git
 "
 

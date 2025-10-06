@@ -108,11 +108,7 @@ $MAKE_CMD install
 $MAKE_CMD clean
 
 cd "$REPOS_DIR/gershwin-dbuskit"
-# TODO: Port this fix to GNUmakefile.preamble properly
-if [ "$(uname)" = "Linux" ] ; then
-  cp -r /usr/lib/dbus-1.0/include/dbus /usr/include/ || true # Arch Linux; FIXME: Find a better way
-  cp -r /usr/lib/*-linux-gnu/dbus-1.0/include/dbus /usr/include/ || true # Debian; FIXME: Find a better way
-fi
+./configure	
 $MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean

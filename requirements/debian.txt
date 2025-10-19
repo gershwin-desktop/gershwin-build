@@ -30,4 +30,5 @@ libxcb1-dev
 libxcb-cursor-dev
 libxcb-ewmh-dev
 libxcb-icccm4-dev
+libxcb-shape0-dev
 wget

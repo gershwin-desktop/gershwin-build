@@ -15,6 +15,8 @@ https://github.com/gershwin-desktop/gershwin-rik-theme.git
 https://github.com/gershwin-desktop/gershwin-terminal.git
 https://github.com/gershwin-desktop/gershwin-textedit.git
 https://github.com/gershwin-desktop/gershwin-dbuskit.git
+https://github.com/gershwin-desktop/gershwin-xcbkit.git
+https://github.com/gershwin-desktop/gershwin-uroswm.git
 "
 
 mkdir -p repos

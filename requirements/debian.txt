@@ -29,4 +29,5 @@ libdbus-1-dev
 libxcb1-dev
 libxcb-cursor-dev
 libxcb-ewmh-dev
+libxcb-icccm4-dev
 wget

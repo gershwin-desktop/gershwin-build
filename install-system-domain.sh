@@ -114,7 +114,7 @@ $MAKE_CMD install
 $MAKE_CMD clean
 
 cd "$REPOS_DIR/gershwin-xcbkit"
-$MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
+$MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM -include unistd.h" -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean
 

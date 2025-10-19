@@ -112,3 +112,15 @@ cd "$REPOS_DIR/gershwin-dbuskit"
 $MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean
+
+cd "$REPOS_DIR/gershwin-xcbkit"
+./configure	
+$MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
+$MAKE_CMD install
+$MAKE_CMD clean
+
+cd "$REPOS_DIR/gershwin-uroswm"
+./configure	
+$MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
+$MAKE_CMD install
+$MAKE_CMD clean

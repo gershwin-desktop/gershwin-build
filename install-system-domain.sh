@@ -29,7 +29,7 @@ export GNUSTEP_INSTALLATION_DOMAIN="SYSTEM"
 
 mkdir -p /System/Library/Scripts
 # TODO: Decide in which repository Gershwin.sh should live, move it there, and update the next line accordingly
-wget "https://gist.githubusercontent.com/probonopd/03609e7016f5b7a5ef4afe84fcb71456/raw/e55be81e3d07f02ad0d85871d6b1f9a1710c2a93/Gershwin.sh" -O /System/Library/Scripts/Gershwin.sh
+wget "https://gist.githubusercontent.com/probonopd/03609e7016f5b7a5ef4afe84fcb71456/raw/fa895797cdd4e31b1583bd200ecc8a71ea90eb01/Gershwin.sh" -O /System/Library/Scripts/Gershwin.sh
 chmod +x /System/Library/Scripts/Gershwin.sh
 
 echo "Building/installing libobjc2..."

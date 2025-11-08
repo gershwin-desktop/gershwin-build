@@ -27,11 +27,6 @@ $MAKE_CMD distclean
 
 export GNUSTEP_INSTALLATION_DOMAIN="SYSTEM"
 
-mkdir -p /System/Library/Scripts
-# TODO: Decide in which repository Gershwin.sh should live, move it there, and update the next line accordingly
-wget "https://gist.githubusercontent.com/probonopd/03609e7016f5b7a5ef4afe84fcb71456/raw/fa895797cdd4e31b1583bd200ecc8a71ea90eb01/Gershwin.sh" -O /System/Library/Scripts/Gershwin.sh
-chmod +x /System/Library/Scripts/Gershwin.sh
-
 echo "Building/installing libobjc2..."
 if [ -d "$REPOS_DIR/libobjc2/Build" ] ; then
   rm -rf "$REPOS_DIR/libobjc2/Build"

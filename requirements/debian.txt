@@ -25,7 +25,9 @@ libao-dev
 xfonts-75dpi
 xfonts-75dpi
 libc6-dev
+libcurl4-openssl-dev
 libdbus-1-dev
+libpam0g-dev
 libxcb1-dev
 libxcb-cursor-dev
 libxcb-ewmh-dev

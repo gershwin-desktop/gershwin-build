@@ -16,23 +16,14 @@ This is intended for Gershwin developers only.  For more stable packaging with a
 
 ## Building from source, installation and uninstallation
 
-After installing, configuring the above requirements run the following commands to get the rest of the requirements for building:
+After installing, configuring the above requirements run the following commands:
 
 ```
+#  Get the rest of the requirements for building
 git clone https://github.com/gershwin-desktop/gershwin-build.git && cd gershwin-build
-```
-
-```
 sudo ./bootstrap.sh
-```
-
-```
 ./checkout.sh
-```
-
-To build and install Gershwin from sources run the following:
-
-```
+# Build and install Gershwin from sources
 sudo make install
 ```
 

@@ -142,6 +142,6 @@ rm -rf "$tmpdir"
 rm "$ARCHIVE"
 # GhostScript equivalents for PostScript Level 1 and 2 fonts like Helvetica
 cd "$REPOS_DIR/urw-base35-fonts"
-cp Resource/Font/*.otf "$DEST"/ || exit 1
+cp fonts/*.otf "$DEST"/ || exit 1
 cp -r fontconfig /System/Library/Preferences/Fontconfig || exit 1
 find "$DEST"

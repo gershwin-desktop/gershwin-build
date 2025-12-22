@@ -130,8 +130,14 @@ $MAKE_CMD install
 $MAKE_CMD clean
 
 # Luxi Sans, same author as Lucida Grande
-wget -c https://xorg.freedesktop.org/releases/individual/font/font-bh-ttf-1.0.4.tar.xz
-mkdir -p /System/Library/Fonts
-tar xf font-bh-ttf-*.tar.xz -C /System/Library/Fonts --wildcards 'font-bh-ttf-*/luxis*'  'font-bh-ttf-*/COPYRIGHT.BH' --strip-components=1
-rm font-bh-ttf-*.tar.xz
-find /System/Library/Fonts
+ARCHIVE=font-bh-ttf-1.0.4.tar.xz
+DEST=/System/Library/Fonts
+wget -c https://xorg.freedesktop.org/releases/individual/font/$ARCHIVE # TODO: Host on GitHub Releases instead
+mkdir -p "$DEST"
+tmpdir=$(mktemp -d) || exit 1
+tar xf "$ARCHIVE" -C "$tmpdir" || exit 1
+cp "$tmpdir"/font-bh-ttf-*/luxis* "$DEST"/ || exit 1
+cp "$tmpdir"/font-bh-ttf-*/COPYRIGHT.BH "$DEST"/ || exit 1
+rm -rf "$tmpdir"
+rm "$ARCHIVE"
+find "$DEST"

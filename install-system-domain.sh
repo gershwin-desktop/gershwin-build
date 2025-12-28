@@ -129,6 +129,11 @@ $MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean
 
+cd "$REPOS_DIR/gershwin-components/appwrap"
+$MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
+$MAKE_CMD install
+$MAKE_CMD clean
+
 # Luxi Sans, same author as Lucida Grande
 ARCHIVE=font-bh-ttf-1.0.4.tar.xz
 DEST=/System/Library/Fonts

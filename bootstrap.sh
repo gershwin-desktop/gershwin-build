@@ -33,7 +33,7 @@ echo "Checking packages in: $REQUIREMENTS_FILE"
 missing=""
 
 case "$OS_ID" in
-  arch)
+  arch|artix)
     while IFS= read -r pkg || [ -n "$pkg" ]; do
       [ -z "$pkg" ] && continue
       if ! pacman -Qi "$pkg" >/dev/null 2>&1; then
@@ -49,7 +49,7 @@ case "$OS_ID" in
     fi
     ;;
 
-  debian)
+  debian|devuan)
     while IFS= read -r pkg || [ -n "$pkg" ]; do
       pkg="${pkg%%#*}"           # strip comments after #
       pkg="$(echo "$pkg" | xargs)" # trim whitespace

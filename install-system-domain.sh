@@ -129,17 +129,9 @@ $MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean
 
-# Luxi Sans, same author as Lucida Grande
-ARCHIVE=font-bh-ttf-1.0.4.tar.xz
+# Install fonts from URW Base35 repository
 DEST=/System/Library/Fonts
-wget -c https://xorg.freedesktop.org/releases/individual/font/$ARCHIVE # TODO: Host on GitHub Releases instead
 mkdir -p "$DEST"
-tmpdir=$(mktemp -d) || exit 1
-tar xf "$ARCHIVE" -C "$tmpdir" || exit 1
-cp "$tmpdir"/font-bh-ttf-*/luxis* "$DEST"/ || exit 1
-cp "$tmpdir"/font-bh-ttf-*/COPYRIGHT.BH "$DEST"/ || exit 1
-rm -rf "$tmpdir"
-rm "$ARCHIVE"
 # GhostScript equivalents for PostScript Level 1 and 2 fonts like Helvetica
 cd "$REPOS_DIR/urw-base35-fonts"
 cp fonts/*.otf "$DEST"/ || exit 1

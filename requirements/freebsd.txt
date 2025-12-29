@@ -24,4 +24,6 @@ libxcb
 xcb-util-cursor
 xcb-util
 xcb-util-wm
+xrandr
+libXrandr
 wget

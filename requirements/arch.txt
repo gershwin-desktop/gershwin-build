@@ -28,4 +28,6 @@ dbus
 libxcb
 xcb-util-cursor
 xcb-util-wm
+xorg-xrandr
+libxrandr
 wget

@@ -134,6 +134,11 @@ $MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean
 
+cd "$REPOS_DIR/gershwin-components/Display"
+$MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
+$MAKE_CMD install
+$MAKE_CMD clean
+
 # Luxi Sans, same author as Lucida Grande
 DEST=/System/Library/Fonts
 mkdir -p "$DEST"

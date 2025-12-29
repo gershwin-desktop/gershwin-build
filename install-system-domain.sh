@@ -129,9 +129,12 @@ $MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean
 
-# Install fonts from URW Base35 repository
+# Luxi Sans, same author as Lucida Grande
 DEST=/System/Library/Fonts
 mkdir -p "$DEST"
+cd "$REPOS_DIR/xorg__font__bh-ttf"
+cp luxis* "$DEST"/ || exit 1
+cp COPYRIGHT.BH "$DEST"/ || exit 1
 # GhostScript equivalents for PostScript Level 1 and 2 fonts like Helvetica
 cd "$REPOS_DIR/urw-base35-fonts"
 cp fonts/*.otf "$DEST"/ || exit 1

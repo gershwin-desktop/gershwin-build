@@ -135,18 +135,18 @@ $MAKE_CMD install
 $MAKE_CMD clean
 
 # Luxi Sans, same author as Lucida Grande
-ARCHIVE=font-bh-ttf-1.0.4.tar.xz
 DEST=/System/Library/Fonts
-wget -c https://xorg.freedesktop.org/releases/individual/font/$ARCHIVE # TODO: Host on GitHub Releases instead
 mkdir -p "$DEST"
-tmpdir=$(mktemp -d) || exit 1
-tar xf "$ARCHIVE" -C "$tmpdir" || exit 1
-cp "$tmpdir"/font-bh-ttf-*/luxis* "$DEST"/ || exit 1
-cp "$tmpdir"/font-bh-ttf-*/COPYRIGHT.BH "$DEST"/ || exit 1
-rm -rf "$tmpdir"
-rm "$ARCHIVE"
+cd "$REPOS_DIR/xorg__font__bh-ttf"
+cp luxis*.ttf "$DEST"/ || exit 1
+cp COPYRIGHT.BH "$DEST"/ || exit 1
 # GhostScript equivalents for PostScript Level 1 and 2 fonts like Helvetica
 cd "$REPOS_DIR/urw-base35-fonts"
 cp fonts/*.otf "$DEST"/ || exit 1
 cp -r fontconfig /System/Library/Preferences/Fontconfig || exit 1
+# Use fixed Nimbus Sans from protamail/NimbusSans (replaces URW version)
+# See: https://github.com/ArtifexSoftware/urw-base35-fonts/issues/25
+rm -f "$DEST"/NimbusSans*.otf
+cd "$REPOS_DIR/NimbusSans"
+cp NimbusSans*.ttf "$DEST"/ || exit 1
 find "$DEST"

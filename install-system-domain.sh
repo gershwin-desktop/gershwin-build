@@ -80,7 +80,7 @@ $MAKE_CMD -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean
 
-cd "$REPOS_DIR/gershwin-rik-theme"
+cd "$REPOS_DIR/gershwin-eau-theme"
 $MAKE_CMD -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean

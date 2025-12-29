@@ -133,7 +133,7 @@ $MAKE_CMD clean
 DEST=/System/Library/Fonts
 mkdir -p "$DEST"
 cd "$REPOS_DIR/xorg__font__bh-ttf"
-cp luxis* "$DEST"/ || exit 1
+cp luxis*.ttf "$DEST"/ || exit 1
 cp COPYRIGHT.BH "$DEST"/ || exit 1
 # GhostScript equivalents for PostScript Level 1 and 2 fonts like Helvetica
 cd "$REPOS_DIR/urw-base35-fonts"

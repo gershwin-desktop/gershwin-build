@@ -169,7 +169,7 @@ cd "$REPOS_DIR/NimbusSans"
 cp NimbusSans*.ttf "$FONTS"/ || exit 1
 
 # Inter (it has the Command key symbol)
-cd "$REPOS_DIR/inter/texmf/fonts/opentype/public/inter"
+cd "$REPOS_DIR/CTAN_Inter/inter/texmf/fonts/opentype/public/inter"
 cp Inter-Regular.otf "$FONTS"/ || exit 1
 cp Inter-Italic.otf "$FONTS"/ || exit 1
 cp Inter-Medium.otf "$FONTS"/ || exit 1

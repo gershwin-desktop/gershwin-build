@@ -149,19 +149,32 @@ $MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean
 
-# Luxi Sans, same author as Lucida Grande
-DEST=/System/Library/Fonts
-mkdir -p "$DEST"
+# Fonts
+FONTS=/System/Library/Fonts
+mkdir -p "$FONTS"
+
+# Luxi Sans, same author as Lucida Grande (it lacks the Command key symbol)
 cd "$REPOS_DIR/xorg__font__bh-ttf"
-cp luxis*.ttf "$DEST"/ || exit 1
-cp COPYRIGHT.BH "$DEST"/ || exit 1
+cp luxis*.ttf "$FONTS"/ || exit 1
+cp COPYRIGHT.BH "$FONTS"/ || exit 1
+
 # GhostScript equivalents for PostScript Level 1 and 2 fonts like Helvetica
 cd "$REPOS_DIR/urw-base35-fonts"
-cp fonts/*.otf "$DEST"/ || exit 1
+cp fonts/*.otf "$FONTS"/ || exit 1
 cp -r fontconfig /System/Library/Preferences/Fontconfig || exit 1
 # Use fixed Nimbus Sans from protamail/NimbusSans (replaces URW version)
 # See: https://github.com/ArtifexSoftware/urw-base35-fonts/issues/25
-rm -f "$DEST"/NimbusSans*.otf
+rm -f "$FONTS"/NimbusSans*.otf
 cd "$REPOS_DIR/NimbusSans"
-cp NimbusSans*.ttf "$DEST"/ || exit 1
-find "$DEST"
+cp NimbusSans*.ttf "$FONTS"/ || exit 1
+
+# Inter (it has the Command key symbol)
+cd "$REPOS_DIR/inter/texmf/fonts/opentype/public/inter"
+cp Inter-Regular.otf "$FONTS"/ || exit 1
+cp Inter-Italic.otf "$FONTS"/ || exit 1
+cp Inter-Medium.otf "$FONTS"/ || exit 1
+cp Inter-MediumItalic.otf "$FONTS"/ || exit 1
+cp Inter-Bold.otf "$FONTS"/ || exit 1
+cp Inter-BoldItalic.otf "$FONTS"/ || exit 1
+
+find "$FONTS"

@@ -43,3 +43,4 @@ x11-xserver-utils
 libxrandr-dev
 wget
 sudo
+libcups2-dev

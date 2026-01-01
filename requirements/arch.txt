@@ -31,3 +31,4 @@ xcb-util-wm
 xorg-xrandr
 libxrandr
 wget
+cups

@@ -13,6 +13,7 @@ libicu-dev
 libcairo2-dev
 libxft-dev
 avahi-daemon
+libavahi-compat-libdnssd-dev
 flite
 libxt-dev
 portaudio19-dev

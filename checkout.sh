@@ -22,6 +22,7 @@ https://github.com/freedesktop-unofficial-mirror/xorg__font__bh-ttf.git
 https://github.com/ArtifexSoftware/urw-base35-fonts.git
 https://github.com/protamail/NimbusSans.git
 https://github.com/ccebinger/CTAN_Inter.git
+https://github.com/adobe-fonts/source-code-pro.git
 "
 
 mkdir -p repos

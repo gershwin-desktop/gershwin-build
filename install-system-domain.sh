@@ -189,8 +189,8 @@ cp Inter-BoldItalic.otf "$FONTS"/ || exit 1
 
 # Source Code Pro (Monospaced font for coding)
 cd "$REPOS_DIR/source-code-pro"
-cp SourceCodePro-Regular.otf "$FONTS"/ || exit 1
-cp SourceCodePro-Medium.otf "$FONTS"/ || exit 1
-cp SourceCodePro-Bold.otf "$FONTS"/ || exit 1
+cp OTF/SourceCodePro-Regular.otf "$FONTS"/ || exit 1
+cp OTF/SourceCodePro-Medium.otf "$FONTS"/ || exit 1
+cp OTF/SourceCodePro-Bold.otf "$FONTS"/ || exit 1
 
 find "$FONTS"

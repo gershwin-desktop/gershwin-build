@@ -159,6 +159,16 @@ $MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean
 
+cd "$REPOS_DIR/gershwin-components/Network"
+$MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
+$MAKE_CMD install
+$MAKE_CMD clean
+
+cd "$REPOS_DIR/gershwin-components/Sound"
+$MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
+$MAKE_CMD install
+$MAKE_CMD clean
+
 # Fonts
 FONTS=/System/Library/Fonts
 mkdir -p "$FONTS"

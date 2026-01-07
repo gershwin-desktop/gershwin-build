@@ -66,6 +66,13 @@ $MAKE_CMD -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean
 
+# Hook into tools-make to inject build time and git hash into Info-gnustep.plist files
+cd "$REPOS_DIR/gershwin-components/plistupdate"
+$MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
+$MAKE_CMD install
+sh -e ./setup-integration.sh
+$MAKE_CMD clean
+
 cd "$REPOS_DIR/gershwin-system"
 cp -R Library/* /System/Library/
 

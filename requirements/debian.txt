@@ -40,6 +40,8 @@ libxcb-shm0-dev
 libxcb-randr0-dev
 libxcb-xinerama0-dev
 libxcb-xkb-dev
+libxcb-composite0-dev
+libxcb-damage0-dev
 x11-xserver-utils
 libxrandr-dev
 wget

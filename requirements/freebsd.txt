@@ -29,3 +29,4 @@ xrandr
 libXrandr
 wget
 cups
+libXcomposite

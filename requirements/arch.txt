@@ -32,3 +32,4 @@ xorg-xrandr
 libxrandr
 wget
 cups
+libxcomposite

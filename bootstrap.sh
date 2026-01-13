@@ -33,7 +33,7 @@ echo "Checking packages in: $REQUIREMENTS_FILE"
 missing=""
 
 case "$OS_ID" in
-  arch|artix)
+  arch|artix|manjaro)
     while IFS= read -r pkg || [ -n "$pkg" ]; do
       [ -z "$pkg" ] && continue
       if ! pacman -Qi "$pkg" >/dev/null 2>&1; then

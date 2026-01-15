@@ -48,3 +48,4 @@ wget
 sudo
 libcups2-dev
 libxcomposite-dev
+libsquashfs-dev

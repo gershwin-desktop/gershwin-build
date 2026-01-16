@@ -36,4 +36,3 @@ libxcomposite
 autoconf
 automake
 libtool
-aclocal

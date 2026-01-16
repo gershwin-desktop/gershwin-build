@@ -32,3 +32,5 @@ cups
 libXcomposite
 squashfs-tools-ng
 autoconf
+automake
+libtool

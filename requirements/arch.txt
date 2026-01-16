@@ -33,4 +33,3 @@ libxrandr
 wget
 cups
 libxcomposite
-squashfs-tools-ng

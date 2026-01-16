@@ -33,3 +33,4 @@ libxrandr
 wget
 cups
 libxcomposite
+autoconf

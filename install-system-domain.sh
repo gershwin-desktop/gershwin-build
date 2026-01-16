@@ -77,6 +77,7 @@ cd "$REPOS_DIR/gershwin-system"
 cp -R Library/* /System/Library/
 
 cd "$REPOS_DIR/gershwin-workspace"
+autoreconf -fi
 ./configure
 $MAKE_CMD -j"$CPUS" || exit 1
 $MAKE_CMD install

@@ -34,3 +34,6 @@ wget
 cups
 libxcomposite
 autoconf
+automake
+libtool
+aclocal

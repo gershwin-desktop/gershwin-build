@@ -31,3 +31,4 @@ wget
 cups
 libXcomposite
 squashfs-tools-ng
+autoconf

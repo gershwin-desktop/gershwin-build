@@ -53,6 +53,6 @@ startx /System/Library/Scripts/Gershwin.sh
 > sudo echo "Defaults secure_path=\"/System/Library/Tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\"" > /usr/local/etc/sudoers.d/10_gershwin_secure_path
 > ```
 
-# Optional libraries
+## Optional libraries
 * libdbus for waiting for the Global Menu to appear and for implementing the FileManager1 service that lets, e.g., web browsers, open the file manager to show the downloaded files
 * libsquashfs for AppImage icons

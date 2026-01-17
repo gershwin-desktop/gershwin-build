@@ -28,7 +28,8 @@ build_freebsd_14_amd64_task:
     - mkdir -p artifacts/FreeBSD/14/amd64
     - tar -C / -cJf artifacts/FreeBSD/14/amd64/system.txz /System
     - export TIMESTAMP=$(date +%y%m%d%H%M%S)
-    - mksquashfs /System artifacts/FreeBSD/14/amd64/Gershwin-OS-FreeBSD-${TIMESTAMP}.squashfs -comp xz -b 1M
+    - mksquashfs /System artifacts/FreeBSD/14/amd64/Gershwin-FreeBSD-${TIMESTAMP}.squashfs -comp xz -b 1M
+    - find /System -type f -perm -111 -exec sh -c 'ldd "$1" 2>/dev/null | awk "/=>/ {print \$3}" | xargs -n1 pkg which 2>/dev/null | grep package | awk "{print \$6}" | sed "s/-[^-]*\$//"' sh {} \; | sort -u
   publish_script:
     - cd artifacts/FreeBSD/14/amd64
     - tree -h -D -C -H -./ --houtro=/dev/null -T 'Gershwin System for FreeBSD 14 amd64' ./ > ./index.html
@@ -58,7 +59,8 @@ build_archlinux_x86_64_task:
     - mkdir -p artifacts/ArchLinux/x86_64
     - tar -C / -cJf artifacts/ArchLinux/x86_64/system.txz /System
     - export TIMESTAMP=$(date +%y%m%d%H%M%S)
-    - mksquashfs /System artifacts/ArchLinux/x86_64/Gershwin-OS-ArchLinux-${TIMESTAMP}.squashfs -comp xz -b 1M
+    - mksquashfs /System artifacts/ArchLinux/x86_64/Gershwin-ArchLinux-${TIMESTAMP}.squashfs -comp xz -b 1M
+    - find /System -type f -perm -111 -exec sh -c 'ldd "$1" 2>/dev/null | awk "/=>/ {print \$3}" | xargs -n1 pacman -Qo 2>/dev/null | awk "{print \$5}"' sh {} \; | sort -u
   publish_script:
     - cd artifacts/ArchLinux/x86_64
     - tree -h -D -C -H -./ --houtro=/dev/null -T 'Gershwin System for Arch Linux x86_64' ./ > ./index.html
@@ -88,7 +90,8 @@ build_debian_x86_64_task:
     - mkdir -p artifacts/Debian/x86_64
     - tar -C / -cJf artifacts/Debian/x86_64/system.txz /System
     - export TIMESTAMP=$(date +%y%m%d%H%M%S)
-    - mksquashfs /System artifacts/Debian/x86_64/Gershwin-OS-Debian-${TIMESTAMP}.squashfs -comp xz -b 1M
+    - mksquashfs /System artifacts/Debian/x86_64/Gershwin-Debian-${TIMESTAMP}.squashfs -comp xz -b 1M
+    - find /System -type f -perm -111 -exec sh -c 'ldd "$1" 2>/dev/null | awk "/=>/ {print \$3}" | xargs -n1 dpkg -S 2>/dev/null | cut -d: -f1' sh {} \; | sort -u
   publish_script:
     - cd artifacts/Debian/x86_64
     - tree -h -D -C -H -./ --houtro=/dev/null -T 'Gershwin System for Debian x86_64' ./ > ./index.html

@@ -46,6 +46,20 @@ After making sure usage requirements are met the following should be run as regu
 ```
 startx /System/Library/Scripts/Gershwin.sh
 ```
+
+or:
+
+```
+/System/Library/Scripts/LoginWindow.sh # Starts the X server automatically
+```
+
+or, on FreeBSD/GhostBSD: 
+
+```
+service loginwindow enable && service loginwindow start
+```
+
+
 ## Additional Notes
 
 > Note for users of `sudo`: You can avoid having to constantly use `sudo -E` flag to instal GNUstep apps you build by putting the following files into your `sudoers.d` directory

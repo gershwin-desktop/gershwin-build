@@ -110,12 +110,6 @@ $MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean
 
-cd "$REPOS_DIR/gershwin-dbuskit"
-./configure	
-$MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
-$MAKE_CMD install
-$MAKE_CMD clean
-
 cd "$REPOS_DIR/gershwin-windowmanager/XCBKit"
 $MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM -include unistd.h" -j"$CPUS" || exit 1
 $MAKE_CMD install

@@ -11,12 +11,17 @@ detect_platform
 export_vars
 
 export REPOS_DIR="$WORKDIR/repos"
+
+cd "$REPOS_DIR/gershwin-system"
+mkdir -p /System/Library
+cp -R Library/* /System/Library/
+. /System/Library/Preferences/GNUstep.conf
 export GNUSTEP_INSTALLATION_DOMAIN="SYSTEM"
 
 cd "$REPOS_DIR/tools-make"
 ./configure \
+  --enable-importing-config-file \
   --with-config-file=/System/Library/Preferences/GNUstep.conf \
-  --with-layout=gershwin \
   --with-library-combo=ng-gnu-gnu
 $MAKE_CMD || exit 1
 $MAKE_CMD install
@@ -72,9 +77,6 @@ $MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
 $MAKE_CMD install
 sh -e ./setup-integration.sh
 $MAKE_CMD clean
-
-cd "$REPOS_DIR/gershwin-system"
-cp -R Library/* /System/Library/
 
 cd "$REPOS_DIR/gershwin-workspace"
 autoreconf -fi

@@ -36,3 +36,6 @@ for REPO in $REPOS; do
         git clone "$REPO"
     fi
 done
+
+# Lower CMake version requirements
+sed -i -E 's/cmake_minimum_required\(VERSION 3\.[0-9]+(\.\.\.3\.[0-9]+)?\)/cmake_minimum_required(VERSION 3.20...3.99)/g' swift-corelibs-libdispatch/CMakeLists.txt

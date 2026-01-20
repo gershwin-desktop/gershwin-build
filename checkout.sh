@@ -15,7 +15,6 @@ https://github.com/gershwin-desktop/gershwin-systempreferences.git
 https://github.com/gershwin-desktop/gershwin-eau-theme.git
 https://github.com/gershwin-desktop/gershwin-terminal.git
 https://github.com/gershwin-desktop/gershwin-textedit.git
-https://github.com/gershwin-desktop/gershwin-dbuskit.git
 https://github.com/gershwin-desktop/gershwin-windowmanager.git
 https://github.com/gershwin-desktop/gershwin-components.git
 https://github.com/gershwin-desktop/gershwin-assets.git

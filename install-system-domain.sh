@@ -18,6 +18,9 @@ cp -R Library/* /System/Library/
 . /System/Library/Preferences/GNUstep.conf
 export GNUSTEP_INSTALLATION_DOMAIN="SYSTEM"
 
+cd "$REPOS_DIR/gershwin-assets"
+cp -R Library/* /System/Library/
+
 cd "$REPOS_DIR/tools-make"
 ./configure \
   --enable-importing-config-file \
@@ -187,39 +190,3 @@ cd "$REPOS_DIR/gershwin-components/SudoAskPass"
 $MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean
-
-# Fonts
-FONTS=/System/Library/Fonts
-mkdir -p "$FONTS"
-
-# Luxi Sans, same author as Lucida Grande (it lacks the Command key symbol)
-cd "$REPOS_DIR/xorg__font__bh-ttf"
-cp luxis*.ttf "$FONTS"/ || exit 1
-cp COPYRIGHT.BH "$FONTS"/ || exit 1
-
-# GhostScript equivalents for PostScript Level 1 and 2 fonts like Helvetica
-cd "$REPOS_DIR/urw-base35-fonts"
-cp fonts/*.otf "$FONTS"/ || exit 1
-cp -r fontconfig /System/Library/Preferences/Fontconfig || exit 1
-# Use fixed Nimbus Sans from protamail/NimbusSans (replaces URW version)
-# See: https://github.com/ArtifexSoftware/urw-base35-fonts/issues/25
-rm -f "$FONTS"/NimbusSans*.otf
-cd "$REPOS_DIR/NimbusSans"
-cp NimbusSans*.ttf "$FONTS"/ || exit 1
-
-# Inter (it has the Command key symbol)
-cd "$REPOS_DIR/CTAN_Inter/inter/texmf/fonts/opentype/public/inter"
-cp Inter-Regular.otf "$FONTS"/ || exit 1
-cp Inter-Italic.otf "$FONTS"/ || exit 1
-cp Inter-Medium.otf "$FONTS"/ || exit 1
-cp Inter-MediumItalic.otf "$FONTS"/ || exit 1
-cp Inter-Bold.otf "$FONTS"/ || exit 1
-cp Inter-BoldItalic.otf "$FONTS"/ || exit 1
-
-# Source Code Pro (Monospaced font for coding)
-cd "$REPOS_DIR/source-code-pro"
-cp OTF/SourceCodePro-Regular.otf "$FONTS"/ || exit 1
-cp OTF/SourceCodePro-Medium.otf "$FONTS"/ || exit 1
-cp OTF/SourceCodePro-Bold.otf "$FONTS"/ || exit 1
-
-find "$FONTS"

@@ -21,27 +21,54 @@ export GNUSTEP_INSTALLATION_DOMAIN="SYSTEM"
 cd "$REPOS_DIR/gershwin-assets"
 cp -R Library/* /System/Library/
 
+# Build libdispatch first - provides BlocksRuntime needed by tools-make configure
+echo "Building/installing libdispatch..."
+if [ -d "$REPOS_DIR/swift-corelibs-libdispatch/Build" ] ; then
+  rm -rf "$REPOS_DIR/swift-corelibs-libdispatch/Build"
+fi
+mkdir -p "$REPOS_DIR/swift-corelibs-libdispatch/Build"
+
+cd "$REPOS_DIR/swift-corelibs-libdispatch/Build"
+
+cmake .. \
+  -DCMAKE_INSTALL_PREFIX=/System/Library \
+  -DCMAKE_INSTALL_LIBDIR=Libraries \
+  -DINSTALL_DISPATCH_HEADERS_DIR=/System/Library/Headers/dispatch \
+  -DINSTALL_BLOCK_HEADERS_DIR=/System/Library/Headers \
+  -DINSTALL_OS_HEADERS_DIR=/System/Library/Headers/os \
+  -DINSTALL_PRIVATE_HEADERS=ON \
+  -DCMAKE_INSTALL_MANDIR=Documentation/man \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_C_COMPILER=clang \
+  -DCMAKE_CXX_COMPILER=clang++
+
+"$MAKE_CMD" -j"$CPUS" || exit 1
+"$MAKE_CMD" install || exit 1
+
+# Build tools-make - can now find _Block_copy in libdispatch's BlocksRuntime
+# Use libobjc_LIBS=" " to prevent configure from adding -lobjc to link tests
+echo "Building/installing tools-make..."
 cd "$REPOS_DIR/tools-make"
+$MAKE_CMD distclean 2>/dev/null || true
 ./configure \
   --enable-importing-config-file \
   --with-config-file=/System/Library/Preferences/GNUstep.conf \
-  --with-library-combo=ng-gnu-gnu
+  --with-library-combo=ng-gnu-gnu \
+  --with-objc-lib-flag=" " \
+  LDFLAGS="-L/System/Library/Libraries" \
+  CPPFLAGS="-I/System/Library/Headers" \
+  libobjc_LIBS=" "
 $MAKE_CMD || exit 1
 $MAKE_CMD install
-$MAKE_CMD clean
-$MAKE_CMD distclean
 
 . /System/Library/Makefiles/GNUstep.sh
 
-export GNUSTEP_INSTALLATION_DOMAIN="SYSTEM"
-
+# Build libobjc2 - gnustep-config now available for paths
 echo "Building/installing libobjc2..."
 if [ -d "$REPOS_DIR/libobjc2/Build" ] ; then
   rm -rf "$REPOS_DIR/libobjc2/Build"
-  mkdir -p "$REPOS_DIR/libobjc2/Build"
-else
-  mkdir -p "$REPOS_DIR/libobjc2/Build"
 fi
+mkdir -p "$REPOS_DIR/libobjc2/Build"
 
 cd "$REPOS_DIR/libobjc2/Build"
 
@@ -50,13 +77,19 @@ cmake .. \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_C_COMPILER=clang \
   -DCMAKE_CXX_COMPILER=clang++ \
-  -DEMBEDDED_BLOCKS_RUNTIME=ON
+  -DEMBEDDED_BLOCKS_RUNTIME=OFF \
+  -DBlocksRuntime_INCLUDE_DIR=/System/Library/Headers \
+  -DBlocksRuntime_LIBRARIES=/System/Library/Libraries/libBlocksRuntime.so
 
-"$MAKE_CMD" || exit 1
+"$MAKE_CMD" -j"$CPUS" || exit 1
 "$MAKE_CMD" install || exit 1
 
+export GNUSTEP_INSTALLATION_DOMAIN="SYSTEM"
+
 cd "$REPOS_DIR/libs-base"
-./configure
+./configure \
+  --with-dispatch-include=/System/Library/Headers \
+  --with-dispatch-library=/System/Library/Libraries
 $MAKE_CMD -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean

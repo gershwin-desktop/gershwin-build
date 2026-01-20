@@ -79,14 +79,14 @@ build_debian_x86_64_task:
   use_compute_credits: $CIRRUS_USER_COLLABORATOR == 'true'
   name: "Build Gershwin System for Debian (x86_64)"
   install_script:
+    - apt-get update
+    - apt-get install -y git tree squashfs-tools wget
     - ARCH=$(uname -m)
     - URL="https://github.com/Kitware/CMake/releases/download/v4.2.1/cmake-4.2.1-linux-${ARCH}.tar.gz"
     - wget $URL -O cmake.tar.gz
     - tar -xzvf cmake.tar.gz -C /opt/
     - ln -s /opt/cmake-4.2.1-linux-${ARCH}/bin/cmake /usr/local/bin/cmake
     - cmake --version
-    - apt-get update
-    - apt-get install -y git tree squashfs-tools
     - ./bootstrap.sh
   checkout_script:
     - ./checkout.sh

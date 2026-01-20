@@ -80,7 +80,7 @@ build_debian_x86_64_task:
   name: "Build Gershwin System for Debian (x86_64)"
   install_script:
     - apt-get update
-    - apt-get install -y software-properties-common apt-transport-https ca-certificates lsb-release
+    - apt-get install -y software-properties-common apt-transport-https ca-certificates lsb-release curl
     - curl -fsSL https://apt.kitware.com/keys/kitware.asc | sudo tee /etc/apt/trusted.gpg.d/kitware.asc
     - apt-add-repository 'deb https://apt.kitware.com/ubuntu/ $(lsb_release -c | awk '{print $2}') main'
     - apt-get update

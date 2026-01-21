@@ -36,3 +36,4 @@ libxcomposite
 autoconf
 automake
 libtool
+libdispatch

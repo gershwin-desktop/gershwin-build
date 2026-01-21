@@ -21,6 +21,10 @@ export GNUSTEP_INSTALLATION_DOMAIN="SYSTEM"
 cd "$REPOS_DIR/gershwin-assets"
 cp -R Library/* /System/Library/
 
+# Patch libdispatch
+echo "Patching libdispatch..."
+( cd "$REPOS_DIR" && ./apply_swift-corelibs-libdispatch_patch.sh )
+
 # Build libdispatch first - provides BlocksRuntime needed by tools-make configure
 echo "Building/installing libdispatch..."
 if [ -d "$REPOS_DIR/swift-corelibs-libdispatch/Build" ] ; then

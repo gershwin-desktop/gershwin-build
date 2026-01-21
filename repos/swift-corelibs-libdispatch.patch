@@ -1,0 +1,116 @@
+diff --git a/src/event/event_kevent.c b/src/event/event_kevent.c
+index eb80082..e9f3cee 100644
+--- a/src/event/event_kevent.c
++++ b/src/event/event_kevent.c
+@@ -61,6 +61,31 @@ DISPATCH_STATIC_GLOBAL(struct dispatch_muxnote_bucket_s _dispatch_sources[DSL_HA
+ #endif
+ 
+ static const uint32_t _dispatch_timer_index_to_fflags[] = {
++#if defined(__FreeBSD__)
++#define DISPATCH_TIMER_FFLAGS_INIT_WALL(qos, note) \
++	[DISPATCH_TIMER_INDEX(DISPATCH_CLOCK_WALL, DISPATCH_TIMER_QOS_##qos)] = \
++			DISPATCH_NOTE_CLOCK_WALL | NOTE_ABSOLUTE | NOTE_LEEWAY | (note)
++#define DISPATCH_TIMER_FFLAGS_INIT_UPTIME(qos, note) \
++	[DISPATCH_TIMER_INDEX(DISPATCH_CLOCK_UPTIME, DISPATCH_TIMER_QOS_##qos)] = \
++			DISPATCH_NOTE_CLOCK_UPTIME | NOTE_LEEWAY | (note)
++#define DISPATCH_TIMER_FFLAGS_INIT_MONOTONIC(qos, note) \
++	[DISPATCH_TIMER_INDEX(DISPATCH_CLOCK_MONOTONIC, DISPATCH_TIMER_QOS_##qos)] = \
++			DISPATCH_NOTE_CLOCK_MONOTONIC | NOTE_LEEWAY | (note)
++	DISPATCH_TIMER_FFLAGS_INIT_WALL(NORMAL, 0),
++	DISPATCH_TIMER_FFLAGS_INIT_UPTIME(NORMAL, 0),
++	DISPATCH_TIMER_FFLAGS_INIT_MONOTONIC(NORMAL, 0),
++#if DISPATCH_HAVE_TIMER_QOS
++	DISPATCH_TIMER_FFLAGS_INIT_WALL(CRITICAL, NOTE_CRITICAL),
++	DISPATCH_TIMER_FFLAGS_INIT_UPTIME(CRITICAL, NOTE_CRITICAL),
++	DISPATCH_TIMER_FFLAGS_INIT_MONOTONIC(CRITICAL, NOTE_CRITICAL),
++	DISPATCH_TIMER_FFLAGS_INIT_WALL(BACKGROUND, NOTE_BACKGROUND),
++	DISPATCH_TIMER_FFLAGS_INIT_UPTIME(BACKGROUND, NOTE_BACKGROUND),
++	DISPATCH_TIMER_FFLAGS_INIT_MONOTONIC(BACKGROUND, NOTE_BACKGROUND),
++#endif
++#undef DISPATCH_TIMER_FFLAGS_INIT_WALL
++#undef DISPATCH_TIMER_FFLAGS_INIT_UPTIME
++#undef DISPATCH_TIMER_FFLAGS_INIT_MONOTONIC
++#else
+ #define DISPATCH_TIMER_FFLAGS_INIT(kind, qos, note) \
+ 	[DISPATCH_TIMER_INDEX(DISPATCH_CLOCK_##kind, DISPATCH_TIMER_QOS_##qos)] = \
+ 			DISPATCH_NOTE_CLOCK_##kind | NOTE_ABSOLUTE | NOTE_LEEWAY | (note)
+@@ -76,6 +101,7 @@ static const uint32_t _dispatch_timer_index_to_fflags[] = {
+ 	DISPATCH_TIMER_FFLAGS_INIT(MONOTONIC, BACKGROUND, NOTE_BACKGROUND),
+ #endif
+ #undef DISPATCH_TIMER_FFLAGS_INIT
++#endif
+ };
+ 
+ static inline void _dispatch_kevent_timer_drain(dispatch_kevent_t ke);
+@@ -752,8 +778,16 @@ retry:
+ #else
+ 		(void)buf;
+ 		(void)avail;
+-		const struct timespec timeout_immediately = {}, *timeout = NULL;
+-		if (flags & KEVENT_FLAG_IMMEDIATE) timeout = &timeout_immediately;
++		// On non-QOS systems (FreeBSD, Linux), add a minimum 1ms delay 
++		// when polling to prevent busy-wait loops that consume excessive CPU.
++		// Without this, kevent() with zero timeout returns immediately even
++		// when there are no events, creating a tight spin loop.
++		const struct timespec timeout_minimal = { 0, 1000000 }; // 1ms
++		const struct timespec *timeout = NULL;
++		if (flags & KEVENT_FLAG_IMMEDIATE) {
++			// Use minimal timeout instead of zero to prevent busy-wait
++			timeout = &timeout_minimal;
++		}
+ 		r = kevent(kqfd, ke, n, ke_out, n_out, timeout);
+ #endif
+ #if DISPATCH_USE_KEVENT_WORKLOOP
+@@ -2399,17 +2433,45 @@ _dispatch_event_loop_timer_arm(dispatch_timer_heap_t dth, uint32_t tidx,
+ 		dispatch_timer_delay_s range, dispatch_clock_now_cache_t nows)
+ {
+ 	dispatch_clock_t clock = DISPATCH_TIMER_CLOCK(tidx);
+-	uint64_t target = range.delay + _dispatch_time_now_cached(clock, nows);
++	bool use_absolute = (_dispatch_timer_index_to_fflags[tidx] & NOTE_ABSOLUTE);
++	uint64_t now = 0;
++	uint64_t target = range.delay;
++	static uint64_t _dispatch_timer_min_delay = 0;
++	/*
++	 * Avoid scheduling timers at or before the current time which can cause
++	 * immediate re-arms and tight kevent polling loops. Enforce a minimum delay
++	 * for both absolute and relative timer programming.
++	 */
++	if (unlikely(!_dispatch_timer_min_delay)) {
++		uint64_t ms = 10;
++		const char *env = getenv("LIBDISPATCH_TIMER_MIN_DELAY_MS");
++		if (env && *env) {
++			char *end = NULL;
++			ms = strtoull(env, &end, 10);
++			if (ms == 0) {
++				ms = 1;
++			}
++		}
++		_dispatch_timer_min_delay = ms * NSEC_PER_MSEC;
++	}
++	if (use_absolute) {
++		now = _dispatch_time_now_cached(clock, nows);
++		target = range.delay + now;
++		if (target < now + _dispatch_timer_min_delay) {
++			target = now + _dispatch_timer_min_delay;
++		}
++	} else {
++		if (target < _dispatch_timer_min_delay) {
++			target = _dispatch_timer_min_delay;
++		}
++#if defined(__OpenBSD__)
++		target /= 1000000;
++#endif
++	}
+ 	if (unlikely(_dispatch_timers_force_max_leeway)) {
+ 		target += range.leeway;
+ 		range.leeway = 0;
+ 	}
+-#if !NOTE_ABSOLUTE
+-	target = range.delay;
+-#if defined(__OpenBSD__)
+-	target /= 1000000;
+-#endif
+-#endif
+ 
+ 	_dispatch_event_loop_timer_program(dth, tidx, target, range.leeway,
+ 			EV_ADD | EV_ENABLE);

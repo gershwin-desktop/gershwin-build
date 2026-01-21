@@ -90,6 +90,10 @@ cmake .. \
 
 export GNUSTEP_INSTALLATION_DOMAIN="SYSTEM"
 
+# Patch libdispatch
+echo "Patching libs-base..."
+( cd "$REPOS_DIR" && ./apply_nsrunloop_patch.sh )
+
 cd "$REPOS_DIR/libs-base"
 ./configure \
   --with-dispatch-include=/System/Library/Headers \

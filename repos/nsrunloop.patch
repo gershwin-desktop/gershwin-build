@@ -1,0 +1,21 @@
+diff --git a/patches/NSRunLoop.m b/patches/NSRunLoop.m
+index 9406da00..70488a1b 100644
+--- a/patches/NSRunLoop.m
++++ b/patches/NSRunLoop.m
+@@ -49,6 +49,8 @@
+ 
+ #import "GSPrivate.h"
+ 
++extern void _dispatch_main_queue_drain(void);
++
+ #ifdef HAVE_SYS_TYPES_H
+ #include <sys/types.h>
+ #endif
+@@ -429,6 +431,7 @@ static inline BOOL timerInvalidated(NSTimer *t)
+ #else
+ #error libdispatch missing main queue callback function
+ #endif
++  _dispatch_main_queue_drain();
+ }
+ @end
+ 

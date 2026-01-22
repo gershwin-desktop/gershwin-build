@@ -24,11 +24,22 @@ fi
 cd "$REPO_DIR"
 
 echo "Entering directory: $REPO_DIR"
-echo "Applying patch with verbose output..."
 
-if patch -p1 -v < "../$PATCH_FILE"; then
+# Check if patch is already applied by looking for patched content
+if grep -q "LIBDISPATCH_TIMER_MIN_DELAY_MS" src/event/event_kevent.c 2>/dev/null; then
+    echo "Patch already applied, skipping."
+    exit 0
+fi
+
+echo "Applying patch..."
+if patch -p1 -N < "../$PATCH_FILE"; then
     echo "Patch applied successfully."
 else
+    # patch -N returns non-zero if already applied, check if that's the case
+    if grep -q "LIBDISPATCH_TIMER_MIN_DELAY_MS" src/event/event_kevent.c 2>/dev/null; then
+        echo "Patch was already partially applied."
+        exit 0
+    fi
     echo "Error: Failed to apply patch."
     exit 1
 fi

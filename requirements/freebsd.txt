@@ -33,4 +33,7 @@ libXcomposite
 squashfs-tools-ng
 autoconf
 automake
+mDNSResponder
 libtool
+libvncserver
+freerdp

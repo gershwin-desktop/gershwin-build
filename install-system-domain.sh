@@ -13,8 +13,7 @@ export_vars
 export REPOS_DIR="$WORKDIR/repos"
 
 cd "$REPOS_DIR/gershwin-system"
-mkdir -p /System/Library
-cp -R Library/* /System/Library/
+$MAKE_CMD install
 . /System/Library/Preferences/GNUstep.conf
 export GNUSTEP_INSTALLATION_DOMAIN="SYSTEM"
 

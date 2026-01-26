@@ -14,7 +14,7 @@ This is intended for Gershwin developers only.  For more stable packaging with a
 ## Requirements for building
 
 * sudo or root access
-* git
+* git (e.g., `pkg install git-lite`) (NOTE: Need to use `/usr/local/bin/git` on FreeBSD freshly installed system when chrooted at the end of the installation)
 
 ## Building from source, installation and uninstallation
 

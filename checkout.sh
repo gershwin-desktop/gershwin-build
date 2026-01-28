@@ -5,7 +5,7 @@ set -e
 REPOS="
 https://github.com/apple/swift-corelibs-libdispatch.git
 https://github.com/gnustep/libobjc2.git
-https://github.com/gnustep/tools-make.git
+https://github.com/pkgdemon/tools-make.git
 https://github.com/gnustep/libs-base.git
 https://github.com/gnustep/libs-gui.git
 https://github.com/gnustep/libs-back.git

@@ -14,7 +14,6 @@ export REPOS_DIR="$WORKDIR/repos"
 
 cd "$REPOS_DIR/gershwin-system"
 $MAKE_CMD install
-. /System/Library/Preferences/GNUstep.conf
 export GNUSTEP_INSTALLATION_DOMAIN="SYSTEM"
 
 cd "$REPOS_DIR/gershwin-assets"
@@ -52,10 +51,11 @@ cmake .. \
 # Use libobjc_LIBS=" " to prevent configure from adding -lobjc to link tests
 echo "Building/installing tools-make..."
 cd "$REPOS_DIR/tools-make"
+git checkout feat/add-gershwin-layout
 $MAKE_CMD distclean 2>/dev/null || true
 ./configure \
-  --enable-importing-config-file \
   --with-config-file=/System/Library/Preferences/GNUstep.conf \
+  --with-layout=gershwin \
   --with-library-combo=ng-gnu-gnu \
   --with-objc-lib-flag=" " \
   LDFLAGS="-L/System/Library/Libraries" \
@@ -122,6 +122,7 @@ sh -e ./setup-integration.sh
 $MAKE_CMD clean
 
 cd "$REPOS_DIR/gershwin-workspace"
+git checkout feat/add-gershwin-layout
 autoreconf -fi
 ./configure
 $MAKE_CMD -j"$CPUS" || exit 1
@@ -156,6 +157,7 @@ $MAKE_CMD install
 $MAKE_CMD clean
 
 cd "$REPOS_DIR/gershwin-windowmanager/XCBKit"
+git checkout feat/add-gershwin-layout
 $MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM -include unistd.h" -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean
@@ -166,6 +168,7 @@ $MAKE_CMD install
 $MAKE_CMD clean
 
 cd "$REPOS_DIR/gershwin-components/Menu"
+git checkout feat/add-gershwin-layout
 ./configure || exit 1
 $MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
 $MAKE_CMD install

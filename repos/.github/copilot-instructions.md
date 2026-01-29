@@ -1,0 +1,41 @@
+- Always use absolute paths for all commands you run on the command line
+  because our code is often in subdirectories
+- Do NOT use absolute paths for any commands in the code, always use from $PATH
+  because binaries may be at different paths on different systems
+- Our code must be cross-platform and work on BSDs and Linux
+- Don't do shortcuts, use proper GNUstep architecture patterns
+- Write GNUstep compatible code. Don't use features unavailable in GNUstep such as CoreFoundation.
+- Always use GNUstep architecture and conventions and design patterns.
+- All code must compile and run correctly on both macOS and GNUstep on Linux.
+- Never hardcode paths to binaries, always use commands from the `$PATH`.
+- Our GNUstep environment is installed in /System and you also have access to its source.
+- NEVER try to install GNUstep with the package manager or use it from /usr
+- The GCD dispatch functions are available and should be used.
+- ARC should be used.
+- Use commands from `$PATH`, not hardcoded paths.
+- Use `gmake`, not `make`.
+- We may be running on Linux or on FreeBSD. Write all code to be portable.
+- Avoid bashisms; use POSIX sh.
+- Build the application until it works, even with multiple attempts.
+- Use -Wall -Wextra -Werror -O2, fix all compiler warnings, regardless of severity.
+- Compile with `clang`, never `gcc`.
+- Use extensive logging for debugging with NSLog.
+- If you build a preference pane, test with `SystemPreferences` on the `$PATH`.
+- Before running any shell commands, check which shell is being used.
+- We may not have `strace`, in that case use `truss` for tracing system calls.
+- Use Model-View-Controller (MVC) architecture where appropriate.
+- Use KVO (Key-Value Observing) for observing changes in properties where needed.
+- Always use a `GNUmakefile` to compile anything involving Foundation or GNUstep.
+- Never "create a simple test to verify" anything. Verify using /System/Applications/LoginWindow.app or other system applications.
+- For all UI elements, follow the instuctions from AppearanceMetrics.h
+- Buttons are 24 px high and neighboring ones are 12 px apart from each other.
+- Use `NSLocalizedString` for all user-facing strings to ensure they are localizable.
+- Unless specifically asked to do so never write test cases; instead, use the existing real applications to verify functionality.
+- NEVER write any summary files, unless specifically requested to do so. Never summarize successes.
+- To test GNUstep applications, use the MCP tools provided by uibridge,
+  use uibridge to launch the target .app bundle using an absolute path
+  and then use uibridge to exercise it
+- Prefer using the uibridge tools to running commands in Terminal
+- DO NOT EVER put strings with /home/... into any source code
+- ALWAYS `killall UIBridgeServer` after having edited/compiled it
+- Whenever you encounter compiler warnings, fix them. Builds must succed with no warnings.

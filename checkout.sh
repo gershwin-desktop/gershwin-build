@@ -68,11 +68,11 @@ if [ "$PINNED" -eq 1 ]; then
     checkout_commit tools-make                   8964f83
     checkout_commit gershwin-components          3395d99
     checkout_commit gershwin-eau-theme           4babcb0
+    checkout_commit gershwin-workspace           1bc3b98
+    checkout_commit gershwin-windowmanager       1f3cc1c
 fi
 
 # The following do not seeem to be causing the issue and are hence no longer pinned for the moment
-# checkout_commit gershwin-workspace           1bc3b98
-# checkout_commit gershwin-windowmanager       1f3cc1c
 # checkout_commit gershwin-assets              4deb482
 # checkout_commit gershwin-system              cdeafb6
 # The following seem unlikely to be causing the issue

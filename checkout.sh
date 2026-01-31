@@ -64,7 +64,7 @@ if [ "$PINNED" -eq 1 ]; then
     checkout_commit gershwin-assets              4deb482
     checkout_commit gershwin-components          3395d99
     checkout_commit gershwin-eau-theme           4babcb0
-    checkout_commit gershwin-system              e3ecc38
+    checkout_commit gershwin-system              cdeafb6
     checkout_commit gershwin-systempreferences   8d49f50
     checkout_commit gershwin-terminal            71124e3
     checkout_commit gershwin-textedit            3df6db8

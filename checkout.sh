@@ -67,8 +67,8 @@ if [ "$PINNED" -eq 1 ]; then
     checkout_commit libs-gui                     8be638c
     checkout_commit swift-corelibs-libdispatch   ac3302c
     checkout_commit tools-make                   8964f83
-    # FIXME: Likely the bug is in gershwin-components but not in Menu
-    checkout_commit gershwin-components          3395d99
+    checkout_commit gershwin-components          3395d99 // Bug is there even with this pinned
+    checkout_commit gershwin-eau-theme           4babcb0 // Is the culprit here?
 fi
 
 # The following do not seeem to be causing the issue and are hence no longer pinned for the moment
@@ -76,7 +76,6 @@ fi
 # checkout_commit gershwin-workspace           1bc3b98
 # checkout_commit gershwin-windowmanager       1f3cc1c
 # checkout_commit gershwin-system              cdeafb6
-# checkout_commit gershwin-eau-theme           4babcb0
 # checkout_commit gershwin-systempreferences   8d49f50
 # checkout_commit gershwin-terminal            71124e3
 # checkout_commit gershwin-textedit            3df6db8

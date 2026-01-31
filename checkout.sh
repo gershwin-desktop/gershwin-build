@@ -62,14 +62,10 @@ if [ "$PINNED" -eq 1 ]; then
     }
 
     checkout_commit gershwin-assets              4deb482
-    checkout_commit gershwin-components          3395d99
-    checkout_commit gershwin-eau-theme           4babcb0
     checkout_commit gershwin-system              cdeafb6
     checkout_commit gershwin-systempreferences   8d49f50
     checkout_commit gershwin-terminal            71124e3
     checkout_commit gershwin-textedit            3df6db8
-    checkout_commit gershwin-windowmanager       1f3cc1c
-    checkout_commit gershwin-workspace           1bc3b98
     checkout_commit libobjc2                     4148a3d
     checkout_commit libs-back                    bb23f6e
     checkout_commit libs-base                    050c6cc
@@ -77,6 +73,12 @@ if [ "$PINNED" -eq 1 ]; then
     checkout_commit swift-corelibs-libdispatch   ac3302c
     checkout_commit tools-make                   8964f83
 fi
+
+# The following do not seeem to be causing the issue and are hence no longer pinned for the moment
+# checkout_commit gershwin-eau-theme           4babcb0
+# checkout_commit gershwin-workspace           1bc3b98
+# checkout_commit gershwin-windowmanager       1f3cc1c
+# checkout_commit gershwin-components          3395d99
 
 
 # Lower CMake version requirements

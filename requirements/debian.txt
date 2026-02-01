@@ -50,3 +50,4 @@ libcups2-dev
 libxcomposite-dev
 libsquashfs-dev
 autoconf
+automake

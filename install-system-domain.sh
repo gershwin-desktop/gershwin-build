@@ -171,6 +171,11 @@ $MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
 $MAKE_CMD install
 $MAKE_CMD clean
 
+cd "$REPOS_DIR/gershwin-components/DirectoryServices"
+$MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
+$MAKE_CMD install
+$MAKE_CMD clean
+
 cd "$REPOS_DIR/gershwin-components/LoginWindow"
 $MAKE_CMD CPPFLAGS="-DGNUSTEP_INSTALL_TYPE=SYSTEM" -j"$CPUS" || exit 1
 $MAKE_CMD install

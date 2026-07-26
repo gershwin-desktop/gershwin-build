@@ -126,7 +126,7 @@ if [ "$PINNED" -eq 1 ]; then
     checkout_commit libs-gui                     8be638c
     checkout_commit swift-corelibs-libdispatch   4876f91
     checkout_commit tools-make                   50cf961
-    checkout_commit libs-av                      26566e2
+    checkout_commit libs-av                      922d3c3
     checkout_commit libs-steptalk                2b57b46
 
 fi

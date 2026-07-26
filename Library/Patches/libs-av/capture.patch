@@ -1,57 +1,113 @@
-From bf497631d76be6043c1eff30c1d425797e44dc3d Mon Sep 17 00:00:00 2001
+From c1417b2b1142af4ca580864edd782fa5e04b14bc Mon Sep 17 00:00:00 2001
 From: probonopd <probonopd@users.noreply.github.com>
-Date: Sun, 26 Jul 2026 19:04:09 +0200
-Subject: [PATCH] AVFoundation: add AVCapture audio recording classes via
- libavdevice
+Date: Sun, 26 Jul 2026 19:49:38 +0200
+Subject: [PATCH] AVFoundation: AVCapture recording classes via libavdevice
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
 
-- AVCaptureSession — manage capture lifecycle, uses FFmpeg avdevice
-  to open ALSA/OSS/Pulse input, decode with avcodec, resample to
-  mono float PCM via libswresample in a background pthread
-- AVCaptureDevice — enumerate audio input devices, default mic
-- AVCaptureDeviceInput — connect a device to a session
-- AVCaptureAudioDataOutput — callback delegate with float PCM data
-- No libdispatch dependency — delegate called directly on capture thread
-- GNUmakefile.preamble: add libavdevice, libswresample with fallback
+- AVCaptureSession — capture lifecycle via FFmpeg avdevice (ALSA/OSS/Pulse)
+- AVCaptureDevice — audio device representation
+- AVCaptureDeviceInput — connect device to session
+- AVCaptureAudioDataOutput — delegate callback with float PCM samples
+- GNUmakefile.preamble: add libavdevice, libswresample with pkg-config fallback
+- Replaces empty stubs with working implementations
 ---
- AVFoundation/AVCaptureDevice.h    |  42 +++++
- AVFoundation/AVCaptureDevice.m    |  89 +++++++++
- AVFoundation/AVCaptureInput.h     |  38 ++++
- AVFoundation/AVCaptureInput.m     |  47 +++++
- AVFoundation/AVCaptureOutput.h    |  37 ++++
- AVFoundation/AVCaptureOutput.m    |  35 ++++
- AVFoundation/AVCaptureSession.h   |  58 ++++++
- AVFoundation/AVCaptureSession.m   | 290 ++++++++++++++++++++++++++++++
- AVFoundation/AVFoundation.h       |   4 +
- AVFoundation/GNUmakefile          |   8 +
- AVFoundation/GNUmakefile.preamble |   9 +-
- 11 files changed, 655 insertions(+), 2 deletions(-)
- create mode 100644 AVFoundation/AVCaptureDevice.h
- create mode 100644 AVFoundation/AVCaptureDevice.m
- create mode 100644 AVFoundation/AVCaptureInput.h
- create mode 100644 AVFoundation/AVCaptureInput.m
- create mode 100644 AVFoundation/AVCaptureOutput.h
- create mode 100644 AVFoundation/AVCaptureOutput.m
- create mode 100644 AVFoundation/AVCaptureSession.h
- create mode 100644 AVFoundation/AVCaptureSession.m
+ AVFoundation/AVCaptureAudioDataOutput.h |  18 +-
+ AVFoundation/AVCaptureAudioDataOutput.m |  28 ++-
+ AVFoundation/AVCaptureDevice.h          |  29 ++-
+ AVFoundation/AVCaptureDevice.m          |  87 ++++++-
+ AVFoundation/AVCaptureInput.h           |  25 +-
+ AVFoundation/AVCaptureInput.m           |  45 +++-
+ AVFoundation/AVCaptureOutput.h          |   8 +-
+ AVFoundation/AVCaptureOutput.m          |  12 +-
+ AVFoundation/AVCaptureSession.h         |  45 +++-
+ AVFoundation/AVCaptureSession.m         | 289 +++++++++++++++++++++-
+ AVFoundation/GNUmakefile                | 314 +-----------------------
+ AVFoundation/GNUmakefile.preamble       |   9 +-
+ 12 files changed, 567 insertions(+), 342 deletions(-)
 
+diff --git a/AVFoundation/AVCaptureAudioDataOutput.h b/AVFoundation/AVCaptureAudioDataOutput.h
+index b6fbc0c..80e7a6e 100644
+--- a/AVFoundation/AVCaptureAudioDataOutput.h
++++ b/AVFoundation/AVCaptureAudioDataOutput.h
+@@ -4,10 +4,24 @@
+ #define _AVCaptureAudioDataOutput_h_GNUSTEP_INCLUDE
+ 
+ #import <Foundation/NSObject.h>
++#import <Foundation/NSData.h>
++#import <AVFoundation/AVCaptureOutput.h>
+ 
+-#if OS_API_VERSION(MAC_OS_X_VERSION_10_0, GS_API_LATEST)
++#if OS_API_VERSION(MAC_OS_X_VERSION_10_7, GS_API_LATEST)
+ 
+-@interface AVCaptureAudioDataOutput : NSObject
++@protocol AVCaptureAudioDataOutputSampleDelegate <NSObject>
++- (void)captureOutput:(id)output
++  didOutputSampleData:(NSData *)sampleData
++           numSamples:(NSUInteger)numSamples
++           sampleRate:(double)sampleRate;
++@end
++
++@interface AVCaptureAudioDataOutput : AVCaptureOutput
++{
++  id <AVCaptureAudioDataOutputSampleDelegate> _delegate;
++}
++@property (nonatomic, assign) id <AVCaptureAudioDataOutputSampleDelegate> sampleDelegate;
++- (void)setSampleDelegate:(id <AVCaptureAudioDataOutputSampleDelegate>)delegate;
+ @end
+ 
+ #endif
+diff --git a/AVFoundation/AVCaptureAudioDataOutput.m b/AVFoundation/AVCaptureAudioDataOutput.m
+index d5b8116..a1d16fe 100644
+--- a/AVFoundation/AVCaptureAudioDataOutput.m
++++ b/AVFoundation/AVCaptureAudioDataOutput.m
+@@ -1,10 +1,28 @@
+ /* This file is part of GNUstep */
+ 
+-#import <AVFoundation/AVCaptureAudioDataOutput.h>
+-
+-#if OS_API_VERSION(MAC_OS_X_VERSION_10_0, GS_API_LATEST)
++#import "AVCaptureAudioDataOutput.h"
++#import "AVCaptureSession.h"
++#import <Foundation/NSDebug.h>
+ 
+ @implementation AVCaptureAudioDataOutput
+-@end
+ 
+-#endif
++- (id)init
++{
++  self = [super init];
++  if (self) {
++    _delegate = nil;
++  }
++  return self;
++}
++
++- (id <AVCaptureAudioDataOutputSampleDelegate>)sampleDelegate
++{
++  return _delegate;
++}
++
++- (void)setSampleDelegate:(id <AVCaptureAudioDataOutputSampleDelegate>)delegate
++{
++  _delegate = delegate;
++}
++
++@end
 diff --git a/AVFoundation/AVCaptureDevice.h b/AVFoundation/AVCaptureDevice.h
-new file mode 100644
-index 0000000..975f03f
---- /dev/null
+index 2ba2a98..975f03f 100644
+--- a/AVFoundation/AVCaptureDevice.h
 +++ b/AVFoundation/AVCaptureDevice.h
-@@ -0,0 +1,42 @@
-+/* This file is part of GNUstep */
-+
-+#ifndef _AVCaptureDevice_h_GNUSTEP_INCLUDE
-+#define _AVCaptureDevice_h_GNUSTEP_INCLUDE
-+
-+#import <Foundation/NSObject.h>
+@@ -4,10 +4,37 @@
+ #define _AVCaptureDevice_h_GNUSTEP_INCLUDE
+ 
+ #import <Foundation/NSObject.h>
 +#import <Foundation/NSString.h>
 +#import <Foundation/NSArray.h>
-+
+ 
+-#if OS_API_VERSION(MAC_OS_X_VERSION_10_0, GS_API_LATEST)
 +#if OS_API_VERSION(MAC_OS_X_VERSION_10_7, GS_API_LATEST)
 +
 +typedef NS_ENUM(NSInteger, AVCaptureDevicePosition) {
@@ -61,8 +117,8 @@ index 0000000..975f03f
 +
 +extern NSString *const AVCaptureDeviceWasConnectedNotification;
 +extern NSString *const AVCaptureDeviceWasDisconnectedNotification;
-+
-+@interface AVCaptureDevice : NSObject
+ 
+ @interface AVCaptureDevice : NSObject
 +{
 +  NSString *_uniqueID;
 +  NSString *_modelID;
@@ -80,21 +136,20 @@ index 0000000..975f03f
 +- (BOOL)isConnected;
 +- (AVCaptureDevicePosition)position;
 +
-+@end
-+
-+#endif
-+
-+#endif
+ @end
+ 
+ #endif
 diff --git a/AVFoundation/AVCaptureDevice.m b/AVFoundation/AVCaptureDevice.m
-new file mode 100644
-index 0000000..212c6d6
---- /dev/null
+index 219461c..212c6d6 100644
+--- a/AVFoundation/AVCaptureDevice.m
 +++ b/AVFoundation/AVCaptureDevice.m
-@@ -0,0 +1,89 @@
-+/* This file is part of GNUstep */
-+
+@@ -1,10 +1,89 @@
+ /* This file is part of GNUstep */
+ 
+-#import <AVFoundation/AVCaptureDevice.h>
 +#import "AVCaptureDevice.h"
-+
+ 
+-#if OS_API_VERSION(MAC_OS_X_VERSION_10_0, GS_API_LATEST)
 +#import <Foundation/NSDictionary.h>
 +#import <Foundation/NSArray.h>
 +#import <Foundation/NSDebug.h>
@@ -116,9 +171,11 @@ index 0000000..212c6d6
 +  }
 +  avdevice_refcount++;
 +}
-+
-+@implementation AVCaptureDevice
-+
+ 
+ @implementation AVCaptureDevice
+-@end
+ 
+-#endif
 ++ (void)initialize
 +{
 +  if (self == [AVCaptureDevice class]) {
@@ -181,25 +238,22 @@ index 0000000..212c6d6
 +
 +@end
 diff --git a/AVFoundation/AVCaptureInput.h b/AVFoundation/AVCaptureInput.h
-new file mode 100644
-index 0000000..c1fedd8
---- /dev/null
+index fd4d345..c1fedd8 100644
+--- a/AVFoundation/AVCaptureInput.h
 +++ b/AVFoundation/AVCaptureInput.h
-@@ -0,0 +1,38 @@
-+/* This file is part of GNUstep */
-+
-+#ifndef _AVCaptureInput_h_GNUSTEP_INCLUDE
-+#define _AVCaptureInput_h_GNUSTEP_INCLUDE
-+
-+#import <Foundation/NSObject.h>
+@@ -4,10 +4,33 @@
+ #define _AVCaptureInput_h_GNUSTEP_INCLUDE
+ 
+ #import <Foundation/NSObject.h>
 +#import <Foundation/NSError.h>
-+
+ 
+-#if OS_API_VERSION(MAC_OS_X_VERSION_10_0, GS_API_LATEST)
 +#if OS_API_VERSION(MAC_OS_X_VERSION_10_7, GS_API_LATEST)
 +
 +@class AVCaptureDevice;
 +@class AVCaptureSession;
-+
-+@interface AVCaptureInput : NSObject
+ 
+ @interface AVCaptureInput : NSObject
 +{
 +  AVCaptureSession *_session;
 +}
@@ -219,31 +273,32 @@ index 0000000..c1fedd8
 +- (id)initWithDevice:(AVCaptureDevice *)device error:(NSError **)outError;
 +- (AVCaptureDevice *)device;
 +
-+@end
-+
-+#endif
-+
-+#endif
+ @end
+ 
+ #endif
 diff --git a/AVFoundation/AVCaptureInput.m b/AVFoundation/AVCaptureInput.m
-new file mode 100644
-index 0000000..27add30
---- /dev/null
+index 9b89ef1..27add30 100644
+--- a/AVFoundation/AVCaptureInput.m
 +++ b/AVFoundation/AVCaptureInput.m
-@@ -0,0 +1,47 @@
-+/* This file is part of GNUstep */
-+
+@@ -1,10 +1,47 @@
+ /* This file is part of GNUstep */
+ 
+-#import <AVFoundation/AVCaptureInput.h>
+-
+-#if OS_API_VERSION(MAC_OS_X_VERSION_10_0, GS_API_LATEST)
 +#import "AVCaptureInput.h"
 +#import "AVCaptureSession.h"
 +#import "AVCaptureDevice.h"
 +#import <Foundation/NSDictionary.h>
-+
-+@implementation AVCaptureInput
+ 
+ @implementation AVCaptureInput
 +
 +- (AVCaptureSession *)session { return _session; }
 +- (void)_setSession:(AVCaptureSession *)s { _session = s; }
 +
-+@end
-+
+ @end
+ 
+-#endif
 +@implementation AVCaptureDeviceInput
 +
 ++ (AVCaptureDeviceInput *)deviceInputWithDevice:(AVCaptureDevice *)device
@@ -278,103 +333,59 @@ index 0000000..27add30
 +
 +@end
 diff --git a/AVFoundation/AVCaptureOutput.h b/AVFoundation/AVCaptureOutput.h
-new file mode 100644
-index 0000000..71f8ec9
---- /dev/null
+index 36d5eda..c0f219a 100644
+--- a/AVFoundation/AVCaptureOutput.h
 +++ b/AVFoundation/AVCaptureOutput.h
-@@ -0,0 +1,37 @@
-+/* This file is part of GNUstep */
-+
-+#ifndef _AVCaptureOutput_h_GNUSTEP_INCLUDE
-+#define _AVCaptureOutput_h_GNUSTEP_INCLUDE
-+
-+#import <Foundation/NSObject.h>
-+#import <Foundation/NSData.h>
-+
+@@ -5,9 +5,15 @@
+ 
+ #import <Foundation/NSObject.h>
+ 
+-#if OS_API_VERSION(MAC_OS_X_VERSION_10_0, GS_API_LATEST)
 +#if OS_API_VERSION(MAC_OS_X_VERSION_10_7, GS_API_LATEST)
 +
 +@class AVCaptureSession;
-+
-+@protocol AVCaptureAudioDataOutputSampleDelegate <NSObject>
-+- (void)captureOutput:(id)output
-+  didOutputSampleData:(NSData *)sampleData
-+           numSamples:(NSUInteger)numSamples
-+           sampleRate:(double)sampleRate;
-+@end
-+
-+@interface AVCaptureOutput : NSObject
+ 
+ @interface AVCaptureOutput : NSObject
 +{
 +  AVCaptureSession *_session;
 +}
 +- (AVCaptureSession *)session;
-+@end
-+
-+@interface AVCaptureAudioDataOutput : AVCaptureOutput
-+{
-+  id <AVCaptureAudioDataOutputSampleDelegate> _delegate;
-+}
-+@property (nonatomic, assign) id <AVCaptureAudioDataOutputSampleDelegate> sampleDelegate;
-+- (void)setSampleDelegate:(id <AVCaptureAudioDataOutputSampleDelegate>)delegate;
-+@end
-+
-+#endif
-+
-+#endif
+ @end
+ 
+ #endif
 diff --git a/AVFoundation/AVCaptureOutput.m b/AVFoundation/AVCaptureOutput.m
-new file mode 100644
-index 0000000..ce558c1
---- /dev/null
+index 863343a..214962d 100644
+--- a/AVFoundation/AVCaptureOutput.m
 +++ b/AVFoundation/AVCaptureOutput.m
-@@ -0,0 +1,35 @@
-+/* This file is part of GNUstep */
-+
+@@ -1,10 +1,12 @@
+ /* This file is part of GNUstep */
+ 
+-#import <AVFoundation/AVCaptureOutput.h>
+-
+-#if OS_API_VERSION(MAC_OS_X_VERSION_10_0, GS_API_LATEST)
 +#import "AVCaptureOutput.h"
 +#import "AVCaptureSession.h"
 +#import <Foundation/NSDebug.h>
-+
-+@implementation AVCaptureOutput
-+
+ 
+ @implementation AVCaptureOutput
+-@end
+ 
+-#endif
 +- (AVCaptureSession *)session { return _session; }
 +- (void)_setSession:(AVCaptureSession *)s { _session = s; }
 +
 +@end
-+
-+@implementation AVCaptureAudioDataOutput
-+
-+- (id)init
-+{
-+  self = [super init];
-+  if (self) {
-+    _delegate = nil;
-+  }
-+  return self;
-+}
-+
-+- (id <AVCaptureAudioDataOutputSampleDelegate>)sampleDelegate
-+{
-+  return _delegate;
-+}
-+
-+- (void)setSampleDelegate:(id <AVCaptureAudioDataOutputSampleDelegate>)delegate
-+{
-+  _delegate = delegate;
-+}
-+
-+@end
 diff --git a/AVFoundation/AVCaptureSession.h b/AVFoundation/AVCaptureSession.h
-new file mode 100644
-index 0000000..0208550
---- /dev/null
+index 88d62c5..0208550 100644
+--- a/AVFoundation/AVCaptureSession.h
 +++ b/AVFoundation/AVCaptureSession.h
-@@ -0,0 +1,58 @@
-+/* This file is part of GNUstep */
-+
-+#ifndef _AVCaptureSession_h_GNUSTEP_INCLUDE
-+#define _AVCaptureSession_h_GNUSTEP_INCLUDE
-+
-+#import <Foundation/NSObject.h>
+@@ -4,10 +4,53 @@
+ #define _AVCaptureSession_h_GNUSTEP_INCLUDE
+ 
+ #import <Foundation/NSObject.h>
 +#import <Foundation/NSArray.h>
-+
+ 
+-#if OS_API_VERSION(MAC_OS_X_VERSION_10_0, GS_API_LATEST)
 +#if OS_API_VERSION(MAC_OS_X_VERSION_10_7, GS_API_LATEST)
 +
 +@class AVCaptureInput;
@@ -391,8 +402,8 @@ index 0000000..0208550
 +  AVCaptureSessionPresetLow,
 +  AVCaptureSessionPreset16000,
 +};
-+
-+@interface AVCaptureSession : NSObject
+ 
+ @interface AVCaptureSession : NSObject
 +{
 +  NSMutableArray *_inputs;
 +  NSMutableArray *_outputs;
@@ -420,33 +431,34 @@ index 0000000..0208550
 +- (void)addOutput:(AVCaptureOutput *)output;
 +- (void)removeOutput:(AVCaptureOutput *)output;
 +
-+@end
-+
-+#endif
-+
-+#endif
+ @end
+ 
+ #endif
 diff --git a/AVFoundation/AVCaptureSession.m b/AVFoundation/AVCaptureSession.m
-new file mode 100644
-index 0000000..9876ffb
---- /dev/null
+index 9ab7904..17e7e02 100644
+--- a/AVFoundation/AVCaptureSession.m
 +++ b/AVFoundation/AVCaptureSession.m
-@@ -0,0 +1,290 @@
-+/* This file is part of GNUstep */
-+
+@@ -1,10 +1,291 @@
+ /* This file is part of GNUstep */
+ 
+-#import <AVFoundation/AVCaptureSession.h>
 +#import "AVCaptureSession.h"
 +#import "AVCaptureInput.h"
 +#import "AVCaptureOutput.h"
++#import "AVCaptureAudioDataOutput.h"
 +#import "AVCaptureDevice.h"
-+
+ 
+-#if OS_API_VERSION(MAC_OS_X_VERSION_10_0, GS_API_LATEST)
 +#import <Foundation/NSDictionary.h>
-+
+ 
+-@implementation AVCaptureSession
 +@interface AVCaptureInput (Private)
 +- (void)_setSession:(AVCaptureSession *)s;
 +@end
 +
 +@interface AVCaptureOutput (Private)
 +- (void)_setSession:(AVCaptureSession *)s;
-+@end
+ @end
 +#import <Foundation/NSArray.h>
 +#import <Foundation/NSException.h>
 +#import <Foundation/NSDebug.h>
@@ -586,7 +598,8 @@ index 0000000..9876ffb
 +  [input _setSession:nil];
 +  [_inputs removeObjectIdenticalTo:input];
 +}
-+
+ 
+-#endif
 +- (void)addOutput:(AVCaptureOutput *)output
 +{
 +  if (![self canAddOutput:output]) return;
@@ -721,43 +734,343 @@ index 0000000..9876ffb
 +}
 +
 +@end
-diff --git a/AVFoundation/AVFoundation.h b/AVFoundation/AVFoundation.h
-index c88bea8..5c4c928 100644
---- a/AVFoundation/AVFoundation.h
-+++ b/AVFoundation/AVFoundation.h
-@@ -13,5 +13,9 @@
- #import <AVFoundation/AVPlayer.h>
- #import <AVFoundation/AVAudioPlayer.h>
- #import <AVFoundation/AVMIDIPlayer.h>
-+#import <AVFoundation/AVCaptureDevice.h>
-+#import <AVFoundation/AVCaptureInput.h>
-+#import <AVFoundation/AVCaptureOutput.h>
-+#import <AVFoundation/AVCaptureSession.h>
- 
- #endif
 diff --git a/AVFoundation/GNUmakefile b/AVFoundation/GNUmakefile
-index f5b42ab..e151e71 100644
+index a4db7db..bbfb79a 100644
 --- a/AVFoundation/GNUmakefile
 +++ b/AVFoundation/GNUmakefile
-@@ -37,6 +37,10 @@ AVPlayerItem.h \
+@@ -37,166 +37,11 @@ AVPlayerItem.h \
  AVPlayer.h \
  AVAudioPlayer.h \
  AVMIDIPlayer.h \
-+AVCaptureDevice.h \
-+AVCaptureInput.h \
-+AVCaptureOutput.h \
-+AVCaptureSession.h \
+-AVAggregateAssetDownloadTask.h \
+-AVAssetCache.h \
+-AVAssetDownloadConfiguration.h \
+-AVAssetDownloadTask.h \
+-AVAssetDownloadURLSession.h \
+-AVAssetExportSession.h \
+-AVAssetImageGenerator.h \
+-AVAssetPlaybackAssistant.h \
+-AVAssetReader.h \
+-AVAssetReaderAudioMixOutput.h \
+-AVAssetReaderOutput.h \
+-AVAssetReaderOutputMetadataAdaptor.h \
+-AVAssetReaderSampleReferenceOutput.h \
+-AVAssetReaderTrackOutput.h \
+-AVAssetReaderVideoCompositionOutput.h \
+-AVAssetTrackGroup.h \
+-AVAssetTrackSegment.h \
+-AVAssetWriter.h \
+-AVAssetWriterInput.h \
+-AVAssetWriterInputGroup.h \
+-AVAssetWriterInputMetadataAdaptor.h \
+-AVAssetWriterInputPassDescription.h \
+-AVAssetWriterInputPixelBufferAdaptor.h \
+-AVAssetWriterInputTaggedPixelBufferGroupAdaptor.h \
+-AVAsynchronousCIImageFilteringRequest.h \
+-AVAudioApplication.h \
+-AVAudioMix.h \
+-AVAudioMixInputParameters.h \
+-AVAudioRecorder.h \
+-AVAudioRoutingArbiter.h \
+-AVAudioSession.h \
+-AVCameraCalibrationData.h \
+-AVCaptureAudioDataOutput.h \
+-AVCaptureAudioFileOutput.h \
+-AVCaptureAudioPreviewOutput.h \
+-AVCaptureAutoExposureBracketedStillImageSettings.h \
+-AVCaptureBracketedStillImageSettings.h \
+-AVCaptureConnection.h \
+-AVCaptureControl.h \
+-AVCaptureDataOutputSynchronizer.h \
+-AVCaptureDeferredPhotoProxy.h \
+-AVCaptureDepthDataOutput.h \
+ AVCaptureDevice.h \
+-AVCaptureDeviceDiscoverySession.h \
+-AVCaptureDeviceFormat.h \
+-AVCaptureDeviceInput.h \
+-AVCaptureExternalDisplayConfiguration.h \
+-AVCaptureExternalDisplayConfigurator.h \
+-AVCaptureFileOutput.h \
+-AVCaptureIndexPicker.h \
+ AVCaptureInput.h \
+-AVCaptureInputPort.h \
+-AVCaptureManualExposureBracketedStillImageSettings.h \
+-AVCaptureMetadataOutput.h \
+-AVCaptureMovieFileOutput.h \
+-AVCaptureMultiCamSession.h \
+ AVCaptureOutput.h \
+-AVCapturePhoto.h \
+-AVCapturePhotoOutput.h \
+-AVCapturePhotoOutputReadinessCoordinator.h \
+-AVCapturePhotoSettings.h \
+-AVCaptureResolvedPhotoSettings.h \
+-AVCaptureScreenInput.h \
++AVCaptureAudioDataOutput.h \
+ AVCaptureSession.h \
+-AVCaptureSlider.h \
+-AVCaptureSpatialAudioMetadataSampleGenerator.h \
+-AVCaptureStillImageOutput.h \
+-AVCaptureSynchronizedData.h \
+-AVCaptureSynchronizedDepthData.h \
+-AVCaptureSynchronizedMetadataObjectData.h \
+-AVCaptureSynchronizedSampleBufferData.h \
+-AVCaptureSystemExposureBiasSlider.h \
+-AVCaptureSystemZoomSlider.h \
+-AVCaptureTimecodeGenerator.h \
+-AVCaptureVideoDataOutput.h \
+-AVCaptureVideoPreviewLayer.h \
+-AVComposition.h \
+-AVCompositionTrack.h \
+-AVCompositionTrackSegment.h \
+-AVContentKeyReportGroup.h \
+-AVContentKeyRequest.h \
+-AVContentKeyResponse.h \
+-AVContentKeySession.h \
+-AVContentKeySpecifier.h \
+-AVContinuityDevice.h \
+-AVDelegatingPlaybackCoordinator.h \
+-AVDepthData.h \
+-AVExternalStorageDevice.h \
+-AVExternalStorageDeviceDiscoverySession.h \
+-AVExternalSyncDevice.h \
+-AVFragmentedAsset.h \
+-AVFragmentedAssetMinder.h \
+-AVFragmentedAssetTrack.h \
+-AVFragmentedMovie.h \
+-AVFragmentedMovieMinder.h \
+-AVFragmentedMovieTrack.h \
+-AVMediaDataStorage.h \
+-AVMediaSelection.h \
+-AVMediaSelectionGroup.h \
+-AVMediaSelectionOption.h \
+-AVMetadataItemFilter.h \
+-AVMetadataObject.h \
+-AVMetadataBodyObject.h \
+-AVMetadataCatBodyObject.h \
+-AVMetadataDogBodyObject.h \
+-AVMetadataFaceObject.h \
+-AVMetadataHumanBodyObject.h \
+-AVMetadataMachineReadableCodeObject.h \
+-AVMetadataSalientObject.h \
+-AVMovie.h \
+-AVMovieTrack.h \
+-AVMutableAudioMix.h \
+-AVMutableAudioMixInputParameters.h \
+-AVMutableComposition.h \
+-AVMutableCompositionTrack.h \
+-AVMutableMetadataItem.h \
+-AVMutableMovie.h \
+-AVMutableMovieTrack.h \
+-AVMutableVideoComposition.h \
+-AVMutableVideoCompositionInstruction.h \
+-AVMutableVideoCompositionLayerInstruction.h \
+-AVOutputSettingsAssistant.h \
+-AVPersistableContentKeyRequest.h \
+-AVPlaybackCoordinationMedium.h \
+-AVPlaybackCoordinator.h \
+-AVPlayerItemLegibleOutput.h \
+-AVPlayerItemMetadataCollector.h \
+-AVPlayerItemMetadataOutput.h \
+-AVPlayerItemOutput.h \
+-AVPlayerItemRenderedLegibleOutput.h \
+-AVPlayerItemSampleBufferOutput.h \
+-AVPlayerItemTrack.h \
+-AVPlayerItemVideoOutput.h \
+-AVPlayerLayer.h \
+-AVPlayerLooper.h \
+-AVPlayerPlaybackCoordinator.h \
+-AVPlayerVideoOutput.h \
+-AVPortraitEffectsMatte.h \
+-AVQueuePlayer.h \
+-AVRenderedCaptionImage.h \
+-AVSampleBufferAudioRenderer.h \
+-AVSampleBufferDisplayLayer.h \
+-AVSampleBufferGenerator.h \
+-AVSampleBufferGeneratorBatch.h \
+-AVSampleBufferRenderSynchronizer.h \
+-AVSampleBufferRequest.h \
+-AVSampleBufferVideoRenderer.h \
+-AVSemanticSegmentationMatte.h \
+-AVSpeechSynthesisProviderAudioUnit.h \
+-AVSpeechSynthesisVoice.h \
+-AVSpeechSynthesizer.h \
+-AVSpeechUtterance.h \
+-AVSynchronizedLayer.h \
+-AVTimedMetadataGroup.h \
+-AVVideoComposition.h \
+-AVVideoCompositionCoreAnimationTool.h \
+-AVVideoCompositionInstruction.h \
+-AVVideoCompositionLayerInstruction.h \
+-AVVideoOutputSpecification.h \
+-AVMutableTimedMetadataGroup.h \
  
  #
  # Class files
-@@ -51,6 +55,10 @@ AVPlayerItem.m \
+@@ -211,166 +56,11 @@ AVPlayerItem.m \
  AVPlayer.m \
  AVAudioPlayer.m \
  AVMIDIPlayer.m \
-+AVCaptureDevice.m \
-+AVCaptureInput.m \
-+AVCaptureOutput.m \
-+AVCaptureSession.m \
+-AVAggregateAssetDownloadTask.m \
+-AVAssetCache.m \
+-AVAssetDownloadConfiguration.m \
+-AVAssetDownloadTask.m \
+-AVAssetDownloadURLSession.m \
+-AVAssetExportSession.m \
+-AVAssetImageGenerator.m \
+-AVAssetPlaybackAssistant.m \
+-AVAssetReader.m \
+-AVAssetReaderAudioMixOutput.m \
+-AVAssetReaderOutput.m \
+-AVAssetReaderOutputMetadataAdaptor.m \
+-AVAssetReaderSampleReferenceOutput.m \
+-AVAssetReaderTrackOutput.m \
+-AVAssetReaderVideoCompositionOutput.m \
+-AVAssetTrackGroup.m \
+-AVAssetTrackSegment.m \
+-AVAssetWriter.m \
+-AVAssetWriterInput.m \
+-AVAssetWriterInputGroup.m \
+-AVAssetWriterInputMetadataAdaptor.m \
+-AVAssetWriterInputPassDescription.m \
+-AVAssetWriterInputPixelBufferAdaptor.m \
+-AVAssetWriterInputTaggedPixelBufferGroupAdaptor.m \
+-AVAsynchronousCIImageFilteringRequest.m \
+-AVAudioApplication.m \
+-AVAudioMix.m \
+-AVAudioMixInputParameters.m \
+-AVAudioRecorder.m \
+-AVAudioRoutingArbiter.m \
+-AVAudioSession.m \
+-AVCameraCalibrationData.m \
+-AVCaptureAudioDataOutput.m \
+-AVCaptureAudioFileOutput.m \
+-AVCaptureAudioPreviewOutput.m \
+-AVCaptureAutoExposureBracketedStillImageSettings.m \
+-AVCaptureBracketedStillImageSettings.m \
+-AVCaptureConnection.m \
+-AVCaptureControl.m \
+-AVCaptureDataOutputSynchronizer.m \
+-AVCaptureDeferredPhotoProxy.m \
+-AVCaptureDepthDataOutput.m \
+ AVCaptureDevice.m \
+-AVCaptureDeviceDiscoverySession.m \
+-AVCaptureDeviceFormat.m \
+-AVCaptureDeviceInput.m \
+-AVCaptureExternalDisplayConfiguration.m \
+-AVCaptureExternalDisplayConfigurator.m \
+-AVCaptureFileOutput.m \
+-AVCaptureIndexPicker.m \
+ AVCaptureInput.m \
+-AVCaptureInputPort.m \
+-AVCaptureManualExposureBracketedStillImageSettings.m \
+-AVCaptureMetadataOutput.m \
+-AVCaptureMovieFileOutput.m \
+-AVCaptureMultiCamSession.m \
+ AVCaptureOutput.m \
+-AVCapturePhoto.m \
+-AVCapturePhotoOutput.m \
+-AVCapturePhotoOutputReadinessCoordinator.m \
+-AVCapturePhotoSettings.m \
+-AVCaptureResolvedPhotoSettings.m \
+-AVCaptureScreenInput.m \
++AVCaptureAudioDataOutput.m \
+ AVCaptureSession.m \
+-AVCaptureSlider.m \
+-AVCaptureSpatialAudioMetadataSampleGenerator.m \
+-AVCaptureStillImageOutput.m \
+-AVCaptureSynchronizedData.m \
+-AVCaptureSynchronizedDepthData.m \
+-AVCaptureSynchronizedMetadataObjectData.m \
+-AVCaptureSynchronizedSampleBufferData.m \
+-AVCaptureSystemExposureBiasSlider.m \
+-AVCaptureSystemZoomSlider.m \
+-AVCaptureTimecodeGenerator.m \
+-AVCaptureVideoDataOutput.m \
+-AVCaptureVideoPreviewLayer.m \
+-AVComposition.m \
+-AVCompositionTrack.m \
+-AVCompositionTrackSegment.m \
+-AVContentKeyReportGroup.m \
+-AVContentKeyRequest.m \
+-AVContentKeyResponse.m \
+-AVContentKeySession.m \
+-AVContentKeySpecifier.m \
+-AVContinuityDevice.m \
+-AVDelegatingPlaybackCoordinator.m \
+-AVDepthData.m \
+-AVExternalStorageDevice.m \
+-AVExternalStorageDeviceDiscoverySession.m \
+-AVExternalSyncDevice.m \
+-AVFragmentedAsset.m \
+-AVFragmentedAssetMinder.m \
+-AVFragmentedAssetTrack.m \
+-AVFragmentedMovie.m \
+-AVFragmentedMovieMinder.m \
+-AVFragmentedMovieTrack.m \
+-AVMediaDataStorage.m \
+-AVMediaSelection.m \
+-AVMediaSelectionGroup.m \
+-AVMediaSelectionOption.m \
+-AVMetadataItemFilter.m \
+-AVMetadataObject.m \
+-AVMetadataBodyObject.m \
+-AVMetadataCatBodyObject.m \
+-AVMetadataDogBodyObject.m \
+-AVMetadataFaceObject.m \
+-AVMetadataHumanBodyObject.m \
+-AVMetadataMachineReadableCodeObject.m \
+-AVMetadataSalientObject.m \
+-AVMovie.m \
+-AVMovieTrack.m \
+-AVMutableAudioMix.m \
+-AVMutableAudioMixInputParameters.m \
+-AVMutableComposition.m \
+-AVMutableCompositionTrack.m \
+-AVMutableMetadataItem.m \
+-AVMutableMovie.m \
+-AVMutableMovieTrack.m \
+-AVMutableVideoComposition.m \
+-AVMutableVideoCompositionInstruction.m \
+-AVMutableVideoCompositionLayerInstruction.m \
+-AVOutputSettingsAssistant.m \
+-AVPersistableContentKeyRequest.m \
+-AVPlaybackCoordinationMedium.m \
+-AVPlaybackCoordinator.m \
+-AVPlayerItemLegibleOutput.m \
+-AVPlayerItemMetadataCollector.m \
+-AVPlayerItemMetadataOutput.m \
+-AVPlayerItemOutput.m \
+-AVPlayerItemRenderedLegibleOutput.m \
+-AVPlayerItemSampleBufferOutput.m \
+-AVPlayerItemTrack.m \
+-AVPlayerItemVideoOutput.m \
+-AVPlayerLayer.m \
+-AVPlayerLooper.m \
+-AVPlayerPlaybackCoordinator.m \
+-AVPlayerVideoOutput.m \
+-AVPortraitEffectsMatte.m \
+-AVQueuePlayer.m \
+-AVRenderedCaptionImage.m \
+-AVSampleBufferAudioRenderer.m \
+-AVSampleBufferDisplayLayer.m \
+-AVSampleBufferGenerator.m \
+-AVSampleBufferGeneratorBatch.m \
+-AVSampleBufferRenderSynchronizer.m \
+-AVSampleBufferRequest.m \
+-AVSampleBufferVideoRenderer.m \
+-AVSemanticSegmentationMatte.m \
+-AVSpeechSynthesisProviderAudioUnit.m \
+-AVSpeechSynthesisVoice.m \
+-AVSpeechSynthesizer.m \
+-AVSpeechUtterance.m \
+-AVSynchronizedLayer.m \
+-AVTimedMetadataGroup.m \
+-AVVideoComposition.m \
+-AVVideoCompositionCoreAnimationTool.m \
+-AVVideoCompositionInstruction.m \
+-AVVideoCompositionLayerInstruction.m \
+-AVVideoOutputSpecification.m \
+-AVMutableTimedMetadataGroup.m \
  
  #
  # Makefiles

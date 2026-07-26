@@ -28,3 +28,4 @@ freerdp
 libvncserver
 libXrandr
 libarchive
+ffmpeg

@@ -1,0 +1,786 @@
+From bf497631d76be6043c1eff30c1d425797e44dc3d Mon Sep 17 00:00:00 2001
+From: probonopd <probonopd@users.noreply.github.com>
+Date: Sun, 26 Jul 2026 19:04:09 +0200
+Subject: [PATCH] AVFoundation: add AVCapture audio recording classes via
+ libavdevice
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- AVCaptureSession — manage capture lifecycle, uses FFmpeg avdevice
+  to open ALSA/OSS/Pulse input, decode with avcodec, resample to
+  mono float PCM via libswresample in a background pthread
+- AVCaptureDevice — enumerate audio input devices, default mic
+- AVCaptureDeviceInput — connect a device to a session
+- AVCaptureAudioDataOutput — callback delegate with float PCM data
+- No libdispatch dependency — delegate called directly on capture thread
+- GNUmakefile.preamble: add libavdevice, libswresample with fallback
+---
+ AVFoundation/AVCaptureDevice.h    |  42 +++++
+ AVFoundation/AVCaptureDevice.m    |  89 +++++++++
+ AVFoundation/AVCaptureInput.h     |  38 ++++
+ AVFoundation/AVCaptureInput.m     |  47 +++++
+ AVFoundation/AVCaptureOutput.h    |  37 ++++
+ AVFoundation/AVCaptureOutput.m    |  35 ++++
+ AVFoundation/AVCaptureSession.h   |  58 ++++++
+ AVFoundation/AVCaptureSession.m   | 290 ++++++++++++++++++++++++++++++
+ AVFoundation/AVFoundation.h       |   4 +
+ AVFoundation/GNUmakefile          |   8 +
+ AVFoundation/GNUmakefile.preamble |   9 +-
+ 11 files changed, 655 insertions(+), 2 deletions(-)
+ create mode 100644 AVFoundation/AVCaptureDevice.h
+ create mode 100644 AVFoundation/AVCaptureDevice.m
+ create mode 100644 AVFoundation/AVCaptureInput.h
+ create mode 100644 AVFoundation/AVCaptureInput.m
+ create mode 100644 AVFoundation/AVCaptureOutput.h
+ create mode 100644 AVFoundation/AVCaptureOutput.m
+ create mode 100644 AVFoundation/AVCaptureSession.h
+ create mode 100644 AVFoundation/AVCaptureSession.m
+
+diff --git a/AVFoundation/AVCaptureDevice.h b/AVFoundation/AVCaptureDevice.h
+new file mode 100644
+index 0000000..975f03f
+--- /dev/null
++++ b/AVFoundation/AVCaptureDevice.h
+@@ -0,0 +1,42 @@
++/* This file is part of GNUstep */
++
++#ifndef _AVCaptureDevice_h_GNUSTEP_INCLUDE
++#define _AVCaptureDevice_h_GNUSTEP_INCLUDE
++
++#import <Foundation/NSObject.h>
++#import <Foundation/NSString.h>
++#import <Foundation/NSArray.h>
++
++#if OS_API_VERSION(MAC_OS_X_VERSION_10_7, GS_API_LATEST)
++
++typedef NS_ENUM(NSInteger, AVCaptureDevicePosition) {
++  AVCaptureDevicePositionUnspecified = 0,
++  AVCaptureDevicePositionBuiltInMicrophone,
++};
++
++extern NSString *const AVCaptureDeviceWasConnectedNotification;
++extern NSString *const AVCaptureDeviceWasDisconnectedNotification;
++
++@interface AVCaptureDevice : NSObject
++{
++  NSString *_uniqueID;
++  NSString *_modelID;
++  NSString *_localizedName;
++  AVCaptureDevicePosition _position;
++  BOOL _connected;
++}
++
+++ (NSArray *)devices;
+++ (AVCaptureDevice *)defaultDeviceWithMediaType:(NSString *)mediaType;
++
++- (NSString *)uniqueID;
++- (NSString *)modelID;
++- (NSString *)localizedName;
++- (BOOL)isConnected;
++- (AVCaptureDevicePosition)position;
++
++@end
++
++#endif
++
++#endif
+diff --git a/AVFoundation/AVCaptureDevice.m b/AVFoundation/AVCaptureDevice.m
+new file mode 100644
+index 0000000..212c6d6
+--- /dev/null
++++ b/AVFoundation/AVCaptureDevice.m
+@@ -0,0 +1,89 @@
++/* This file is part of GNUstep */
++
++#import "AVCaptureDevice.h"
++
++#import <Foundation/NSDictionary.h>
++#import <Foundation/NSArray.h>
++#import <Foundation/NSDebug.h>
++
++#include <libavdevice/avdevice.h>
++#include <libavformat/avformat.h>
++#include <libavutil/avutil.h>
++
++NSString *const AVCaptureDeviceWasConnectedNotification    = @"AVCaptureDeviceWasConnectedNotification";
++NSString *const AVCaptureDeviceWasDisconnectedNotification = @"AVCaptureDeviceWasDisconnectedNotification";
++
++static NSMutableArray *allDevices = nil;
++static int avdevice_refcount = 0;
++
++static void ensure_avdevice(void)
++{
++  if (avdevice_refcount == 0) {
++    avdevice_register_all();
++  }
++  avdevice_refcount++;
++}
++
++@implementation AVCaptureDevice
++
+++ (void)initialize
++{
++  if (self == [AVCaptureDevice class]) {
++    allDevices = [[NSMutableArray alloc] init];
++  }
++}
++
+++ (NSArray *)devices
++{
++  return [[allDevices copy] autorelease];
++}
++
+++ (AVCaptureDevice *)defaultDeviceWithMediaType:(NSString *)mediaType
++{
++  if (![mediaType isEqualToString:@"AVMediaTypeAudio"]) return nil;
++  for (AVCaptureDevice *d in allDevices) {
++    if (d->_connected) return d;
++  }
++  return nil;
++}
++
+++ (void)_addDevice:(AVCaptureDevice *)dev
++{
++  [allDevices addObject:dev];
++}
++
++- (id)initWithUniqueID:(NSString *)uid
++                modelID:(NSString *)mid
++              localizedName:(NSString *)name
++{
++  self = [super init];
++  if (self) {
++    _uniqueID = [uid copy];
++    _modelID  = [mid copy];
++    _localizedName = [name copy];
++    _position = AVCaptureDevicePositionUnspecified;
++    _connected = YES;
++  }
++  return self;
++}
++
++- (void)dealloc
++{
++  [_uniqueID release];
++  [_modelID release];
++  [_localizedName release];
++  [super dealloc];
++}
++
++- (NSString *)uniqueID { return _uniqueID; }
++- (NSString *)modelID { return _modelID; }
++- (NSString *)localizedName { return _localizedName; }
++- (BOOL)isConnected { return _connected; }
++- (AVCaptureDevicePosition)position { return _position; }
++
++- (NSString *)description
++{
++  return [NSString stringWithFormat:@"<%@: %p '%@'>", [self class], self, _localizedName];
++}
++
++@end
+diff --git a/AVFoundation/AVCaptureInput.h b/AVFoundation/AVCaptureInput.h
+new file mode 100644
+index 0000000..c1fedd8
+--- /dev/null
++++ b/AVFoundation/AVCaptureInput.h
+@@ -0,0 +1,38 @@
++/* This file is part of GNUstep */
++
++#ifndef _AVCaptureInput_h_GNUSTEP_INCLUDE
++#define _AVCaptureInput_h_GNUSTEP_INCLUDE
++
++#import <Foundation/NSObject.h>
++#import <Foundation/NSError.h>
++
++#if OS_API_VERSION(MAC_OS_X_VERSION_10_7, GS_API_LATEST)
++
++@class AVCaptureDevice;
++@class AVCaptureSession;
++
++@interface AVCaptureInput : NSObject
++{
++  AVCaptureSession *_session;
++}
++
++- (AVCaptureSession *)session;
++
++@end
++
++@interface AVCaptureDeviceInput : AVCaptureInput
++{
++  AVCaptureDevice *_device;
++  NSError *_error;
++}
++
+++ (AVCaptureDeviceInput *)deviceInputWithDevice:(AVCaptureDevice *)device
++                                          error:(NSError **)outError;
++- (id)initWithDevice:(AVCaptureDevice *)device error:(NSError **)outError;
++- (AVCaptureDevice *)device;
++
++@end
++
++#endif
++
++#endif
+diff --git a/AVFoundation/AVCaptureInput.m b/AVFoundation/AVCaptureInput.m
+new file mode 100644
+index 0000000..27add30
+--- /dev/null
++++ b/AVFoundation/AVCaptureInput.m
+@@ -0,0 +1,47 @@
++/* This file is part of GNUstep */
++
++#import "AVCaptureInput.h"
++#import "AVCaptureSession.h"
++#import "AVCaptureDevice.h"
++#import <Foundation/NSDictionary.h>
++
++@implementation AVCaptureInput
++
++- (AVCaptureSession *)session { return _session; }
++- (void)_setSession:(AVCaptureSession *)s { _session = s; }
++
++@end
++
++@implementation AVCaptureDeviceInput
++
+++ (AVCaptureDeviceInput *)deviceInputWithDevice:(AVCaptureDevice *)device
++                                          error:(NSError **)outError
++{
++  return [[[self alloc] initWithDevice:device error:outError] autorelease];
++}
++
++- (id)initWithDevice:(AVCaptureDevice *)device error:(NSError **)outError
++{
++  if (!device) {
++    if (outError) *outError = [NSError errorWithDomain:@"AVFoundation" code:-1
++      userInfo:@{NSLocalizedDescriptionKey: @"AVCaptureDevice is nil"}];
++    [self release];
++    return nil;
++  }
++  self = [super init];
++  if (self) {
++    _device = [device retain];
++  }
++  return self;
++}
++
++- (void)dealloc
++{
++  [_device release];
++  [_error release];
++  [super dealloc];
++}
++
++- (AVCaptureDevice *)device { return _device; }
++
++@end
+diff --git a/AVFoundation/AVCaptureOutput.h b/AVFoundation/AVCaptureOutput.h
+new file mode 100644
+index 0000000..71f8ec9
+--- /dev/null
++++ b/AVFoundation/AVCaptureOutput.h
+@@ -0,0 +1,37 @@
++/* This file is part of GNUstep */
++
++#ifndef _AVCaptureOutput_h_GNUSTEP_INCLUDE
++#define _AVCaptureOutput_h_GNUSTEP_INCLUDE
++
++#import <Foundation/NSObject.h>
++#import <Foundation/NSData.h>
++
++#if OS_API_VERSION(MAC_OS_X_VERSION_10_7, GS_API_LATEST)
++
++@class AVCaptureSession;
++
++@protocol AVCaptureAudioDataOutputSampleDelegate <NSObject>
++- (void)captureOutput:(id)output
++  didOutputSampleData:(NSData *)sampleData
++           numSamples:(NSUInteger)numSamples
++           sampleRate:(double)sampleRate;
++@end
++
++@interface AVCaptureOutput : NSObject
++{
++  AVCaptureSession *_session;
++}
++- (AVCaptureSession *)session;
++@end
++
++@interface AVCaptureAudioDataOutput : AVCaptureOutput
++{
++  id <AVCaptureAudioDataOutputSampleDelegate> _delegate;
++}
++@property (nonatomic, assign) id <AVCaptureAudioDataOutputSampleDelegate> sampleDelegate;
++- (void)setSampleDelegate:(id <AVCaptureAudioDataOutputSampleDelegate>)delegate;
++@end
++
++#endif
++
++#endif
+diff --git a/AVFoundation/AVCaptureOutput.m b/AVFoundation/AVCaptureOutput.m
+new file mode 100644
+index 0000000..ce558c1
+--- /dev/null
++++ b/AVFoundation/AVCaptureOutput.m
+@@ -0,0 +1,35 @@
++/* This file is part of GNUstep */
++
++#import "AVCaptureOutput.h"
++#import "AVCaptureSession.h"
++#import <Foundation/NSDebug.h>
++
++@implementation AVCaptureOutput
++
++- (AVCaptureSession *)session { return _session; }
++- (void)_setSession:(AVCaptureSession *)s { _session = s; }
++
++@end
++
++@implementation AVCaptureAudioDataOutput
++
++- (id)init
++{
++  self = [super init];
++  if (self) {
++    _delegate = nil;
++  }
++  return self;
++}
++
++- (id <AVCaptureAudioDataOutputSampleDelegate>)sampleDelegate
++{
++  return _delegate;
++}
++
++- (void)setSampleDelegate:(id <AVCaptureAudioDataOutputSampleDelegate>)delegate
++{
++  _delegate = delegate;
++}
++
++@end
+diff --git a/AVFoundation/AVCaptureSession.h b/AVFoundation/AVCaptureSession.h
+new file mode 100644
+index 0000000..0208550
+--- /dev/null
++++ b/AVFoundation/AVCaptureSession.h
+@@ -0,0 +1,58 @@
++/* This file is part of GNUstep */
++
++#ifndef _AVCaptureSession_h_GNUSTEP_INCLUDE
++#define _AVCaptureSession_h_GNUSTEP_INCLUDE
++
++#import <Foundation/NSObject.h>
++#import <Foundation/NSArray.h>
++
++#if OS_API_VERSION(MAC_OS_X_VERSION_10_7, GS_API_LATEST)
++
++@class AVCaptureInput;
++@class AVCaptureOutput;
++@class AVCaptureConnection;
++@class AVCaptureDevice;
++
++extern NSString *const AVCaptureSessionDidStartRunningNotification;
++extern NSString *const AVCaptureSessionDidStopRunningNotification;
++
++typedef NS_ENUM(NSInteger, AVCaptureSessionPreset) {
++  AVCaptureSessionPresetHigh,
++  AVCaptureSessionPresetMedium,
++  AVCaptureSessionPresetLow,
++  AVCaptureSessionPreset16000,
++};
++
++@interface AVCaptureSession : NSObject
++{
++  NSMutableArray *_inputs;
++  NSMutableArray *_outputs;
++  NSMutableArray *_connections;
++  BOOL _running;
++  BOOL _interrupted;
++  AVCaptureSessionPreset _sessionPreset;
++  int _sampleRate;
++  void *_captureHandle;
++}
++
++@property (nonatomic, copy) NSArray *inputs;
++@property (nonatomic, copy) NSArray *outputs;
++@property (nonatomic, readonly, getter=isRunning) BOOL running;
++@property (nonatomic, assign) AVCaptureSessionPreset sessionPreset;
++
++- (void)startRunning;
++- (void)stopRunning;
++
++- (BOOL)canAddInput:(AVCaptureInput *)input;
++- (void)addInput:(AVCaptureInput *)input;
++- (void)removeInput:(AVCaptureInput *)input;
++
++- (BOOL)canAddOutput:(AVCaptureOutput *)output;
++- (void)addOutput:(AVCaptureOutput *)output;
++- (void)removeOutput:(AVCaptureOutput *)output;
++
++@end
++
++#endif
++
++#endif
+diff --git a/AVFoundation/AVCaptureSession.m b/AVFoundation/AVCaptureSession.m
+new file mode 100644
+index 0000000..9876ffb
+--- /dev/null
++++ b/AVFoundation/AVCaptureSession.m
+@@ -0,0 +1,290 @@
++/* This file is part of GNUstep */
++
++#import "AVCaptureSession.h"
++#import "AVCaptureInput.h"
++#import "AVCaptureOutput.h"
++#import "AVCaptureDevice.h"
++
++#import <Foundation/NSDictionary.h>
++
++@interface AVCaptureInput (Private)
++- (void)_setSession:(AVCaptureSession *)s;
++@end
++
++@interface AVCaptureOutput (Private)
++- (void)_setSession:(AVCaptureSession *)s;
++@end
++#import <Foundation/NSArray.h>
++#import <Foundation/NSException.h>
++#import <Foundation/NSDebug.h>
++#import <Foundation/NSNotification.h>
++#import <Foundation/NSThread.h>
++
++#include <libavdevice/avdevice.h>
++#include <libavformat/avformat.h>
++#include <libavcodec/avcodec.h>
++#include <libavutil/avutil.h>
++#include <libswresample/swresample.h>
++#include <pthread.h>
++#include <stdlib.h>
++
++NSString *const AVCaptureSessionDidStartRunningNotification = @"AVCaptureSessionDidStartRunningNotification";
++NSString *const AVCaptureSessionDidStopRunningNotification  = @"AVCaptureSessionDidStopRunningNotification";
++
++#define DEFAULT_SAMPLE_RATE 16000
++
++#pragma mark - Audio pipe thread
++
++typedef struct {
++  AVFormatContext *fmtCtx;
++  AVCodecContext  *decCtx;
++  int              streamIdx;
++  int              sampleRate;
++  AVCaptureAudioDataOutput *output;
++  BOOL             running;
++} CaptureContext;
++
++static void *capture_thread(void *arg)
++{
++  CaptureContext *ctx = (CaptureContext *)arg;
++  AVPacket *packet = av_packet_alloc();
++  AVFrame *frame = av_frame_alloc();
++  SwrContext *swr = NULL;
++  float *floatBuf = NULL;
++  int floatBufCap = 0;
++
++  while (ctx->running && av_read_frame(ctx->fmtCtx, packet) >= 0) {
++    if (packet->stream_index == ctx->streamIdx) {
++      if (avcodec_send_packet(ctx->decCtx, packet) == 0) {
++        while (avcodec_receive_frame(ctx->decCtx, frame) == 0) {
++          if (!swr) {
++            SwrContext *tmp = NULL;
++            AVChannelLayout monoLayout = AV_CHANNEL_LAYOUT_MONO;
++            AVChannelLayout srcLayout = frame->ch_layout;
++            enum AVSampleFormat srcFmt = (enum AVSampleFormat)frame->format;
++            if (swr_alloc_set_opts2(&tmp,
++                  &monoLayout, AV_SAMPLE_FMT_FLT, ctx->sampleRate,
++                  &srcLayout, srcFmt, frame->sample_rate,
++                  0, NULL) >= 0) {
++              swr = tmp;
++              if (swr_init(swr) < 0) { swr_free(&swr); break; }
++            } else {
++              break;
++            }
++          }
++
++          int outSamples = av_rescale_rnd(
++            swr_get_delay(swr, frame->sample_rate) + frame->nb_samples,
++            ctx->sampleRate, frame->sample_rate, AV_ROUND_UP);
++          int bufSize = outSamples * sizeof(float);
++          if (bufSize > floatBufCap) {
++            floatBuf = realloc(floatBuf, bufSize);
++            floatBufCap = bufSize;
++          }
++
++          uint8_t *out[] = { (uint8_t *)floatBuf };
++          int converted = swr_convert(swr, out, outSamples,
++            (const uint8_t **)frame->data, frame->nb_samples);
++          if (converted > 0) {
++            id delegate = [ctx->output sampleDelegate];
++            if (delegate) {
++              NSData *data = [NSData dataWithBytesNoCopy:floatBuf
++                                                  length:converted * sizeof(float)
++                                            freeWhenDone:NO];
++              [delegate captureOutput:ctx->output
++                   didOutputSampleData:data
++                            numSamples:converted
++                            sampleRate:ctx->sampleRate];
++            }
++          }
++        }
++      }
++    }
++    av_packet_unref(packet);
++  }
++
++  av_frame_free(&frame);
++  av_packet_free(&packet);
++  avcodec_free_context(&ctx->decCtx);
++  avformat_close_input(&ctx->fmtCtx);
++  free(floatBuf);
++  swr_free(&swr);
++  return NULL;
++}
++
++#pragma mark - AVCaptureSession
++
++@implementation AVCaptureSession
++
++- (id)init
++{
++  self = [super init];
++  if (self) {
++    _inputs = [[NSMutableArray alloc] init];
++    _outputs = [[NSMutableArray alloc] init];
++    _connections = [[NSMutableArray alloc] init];
++    _sessionPreset = AVCaptureSessionPreset16000;
++    _sampleRate = DEFAULT_SAMPLE_RATE;
++  }
++  return self;
++}
++
++- (void)dealloc
++{
++  [self stopRunning];
++  [_inputs release];
++  [_outputs release];
++  [_connections release];
++  [super dealloc];
++}
++
++- (BOOL)canAddInput:(AVCaptureInput *)input { return input != nil && !_running; }
++- (BOOL)canAddOutput:(AVCaptureOutput *)output { return output != nil && !_running; }
++
++- (void)addInput:(AVCaptureInput *)input
++{
++  if (![self canAddInput:input]) return;
++  [_inputs addObject:input];
++  [input _setSession:self];
++}
++
++- (void)removeInput:(AVCaptureInput *)input
++{
++  [input _setSession:nil];
++  [_inputs removeObjectIdenticalTo:input];
++}
++
++- (void)addOutput:(AVCaptureOutput *)output
++{
++  if (![self canAddOutput:output]) return;
++  [_outputs addObject:output];
++  [output _setSession:self];
++}
++
++- (void)removeOutput:(AVCaptureOutput *)output
++{
++  [output _setSession:nil];
++  [_outputs removeObjectIdenticalTo:output];
++}
++
++- (void)startRunning
++{
++  if (_running) return;
++
++  AVCaptureDevice *device = nil;
++  for (AVCaptureInput *input in _inputs) {
++    if ([input isKindOfClass:[AVCaptureDeviceInput class]]) {
++      device = [(AVCaptureDeviceInput *)input device];
++      break;
++    }
++  }
++  if (!device) {
++    device = [AVCaptureDevice defaultDeviceWithMediaType:@"AVMediaTypeAudio"];
++  }
++  if (!device) return;
++
++  NSString *devPath = [device uniqueID];
++
++  avdevice_register_all();
++
++  const AVInputFormat *fmt = av_find_input_format("alsa");
++  if (!fmt) fmt = av_find_input_format("oss");
++  if (!fmt) fmt = av_find_input_format("pulse");
++
++  AVFormatContext *fmtCtx = NULL;
++  AVDictionary *opts = NULL;
++  av_dict_set(&opts, "sample_rate",
++              [[NSString stringWithFormat:@"%d", _sampleRate] UTF8String], 0);
++  av_dict_set(&opts, "channels", "1", 0);
++
++  if (avformat_open_input(&fmtCtx,
++                           [devPath UTF8String], fmt, &opts) != 0) {
++    NSDebugLLog(@"AVCapture", @"avformat_open_input failed for %@", devPath);
++    av_dict_free(&opts);
++    return;
++  }
++  av_dict_free(&opts);
++
++  if (avformat_find_stream_info(fmtCtx, NULL) < 0) {
++    avformat_close_input(&fmtCtx);
++    return;
++  }
++
++  int streamIdx = -1;
++  for (unsigned i = 0; i < fmtCtx->nb_streams; i++) {
++    if (fmtCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
++      streamIdx = i;
++      break;
++    }
++  }
++  if (streamIdx < 0) {
++    avformat_close_input(&fmtCtx);
++    return;
++  }
++
++  const AVCodec *codec = avcodec_find_decoder(
++    fmtCtx->streams[streamIdx]->codecpar->codec_id);
++  if (!codec) { avformat_close_input(&fmtCtx); return; }
++
++  AVCodecContext *decCtx = avcodec_alloc_context3(codec);
++  if (!decCtx) { avformat_close_input(&fmtCtx); return; }
++  avcodec_parameters_to_context(decCtx,
++    fmtCtx->streams[streamIdx]->codecpar);
++  if (avcodec_open2(decCtx, codec, NULL) < 0) {
++    avcodec_free_context(&decCtx);
++    avformat_close_input(&fmtCtx);
++    return;
++  }
++
++  CaptureContext *capCtx = calloc(1, sizeof(CaptureContext));
++  capCtx->fmtCtx = fmtCtx;
++  capCtx->decCtx = decCtx;
++  capCtx->streamIdx = streamIdx;
++  capCtx->sampleRate = _sampleRate;
++  capCtx->output = [_outputs lastObject];
++  capCtx->running = YES;
++  _captureHandle = capCtx;
++
++  pthread_t thread;
++  pthread_create(&thread, NULL, capture_thread, capCtx);
++  pthread_detach(thread);
++
++  _running = YES;
++  [[NSNotificationCenter defaultCenter]
++    postNotificationName:AVCaptureSessionDidStartRunningNotification
++                  object:self];
++}
++
++- (void)stopRunning
++{
++  if (!_running) return;
++  CaptureContext *capCtx = (CaptureContext *)_captureHandle;
++  if (capCtx) {
++    capCtx->running = NO;
++    free(capCtx);
++  }
++  _captureHandle = NULL;
++  _running = NO;
++  [[NSNotificationCenter defaultCenter]
++    postNotificationName:AVCaptureSessionDidStopRunningNotification
++                  object:self];
++}
++
++- (BOOL)isRunning { return _running; }
++- (NSArray *)inputs { return _inputs; }
++- (NSArray *)outputs { return _outputs; }
++- (AVCaptureSessionPreset)sessionPreset { return _sessionPreset; }
++
++- (void)setSessionPreset:(AVCaptureSessionPreset)p
++{
++  _sessionPreset = p;
++  switch (p) {
++    case AVCaptureSessionPresetHigh:   _sampleRate = 48000; break;
++    case AVCaptureSessionPresetMedium: _sampleRate = 44100; break;
++    case AVCaptureSessionPresetLow:    _sampleRate = 22050; break;
++    case AVCaptureSessionPreset16000:
++    default:                           _sampleRate = 16000; break;
++  }
++}
++
++@end
+diff --git a/AVFoundation/AVFoundation.h b/AVFoundation/AVFoundation.h
+index c88bea8..5c4c928 100644
+--- a/AVFoundation/AVFoundation.h
++++ b/AVFoundation/AVFoundation.h
+@@ -13,5 +13,9 @@
+ #import <AVFoundation/AVPlayer.h>
+ #import <AVFoundation/AVAudioPlayer.h>
+ #import <AVFoundation/AVMIDIPlayer.h>
++#import <AVFoundation/AVCaptureDevice.h>
++#import <AVFoundation/AVCaptureInput.h>
++#import <AVFoundation/AVCaptureOutput.h>
++#import <AVFoundation/AVCaptureSession.h>
+ 
+ #endif
+diff --git a/AVFoundation/GNUmakefile b/AVFoundation/GNUmakefile
+index f5b42ab..e151e71 100644
+--- a/AVFoundation/GNUmakefile
++++ b/AVFoundation/GNUmakefile
+@@ -37,6 +37,10 @@ AVPlayerItem.h \
+ AVPlayer.h \
+ AVAudioPlayer.h \
+ AVMIDIPlayer.h \
++AVCaptureDevice.h \
++AVCaptureInput.h \
++AVCaptureOutput.h \
++AVCaptureSession.h \
+ 
+ #
+ # Class files
+@@ -51,6 +55,10 @@ AVPlayerItem.m \
+ AVPlayer.m \
+ AVAudioPlayer.m \
+ AVMIDIPlayer.m \
++AVCaptureDevice.m \
++AVCaptureInput.m \
++AVCaptureOutput.m \
++AVCaptureSession.m \
+ 
+ #
+ # Makefiles
+diff --git a/AVFoundation/GNUmakefile.preamble b/AVFoundation/GNUmakefile.preamble
+index 987b375..abe107e 100644
+--- a/AVFoundation/GNUmakefile.preamble
++++ b/AVFoundation/GNUmakefile.preamble
+@@ -2,8 +2,13 @@
+ # GNUmakefile.preamble
+ #
+ 
+-FFMPEG_CFLAGS := $(shell pkg-config --cflags libavformat libavcodec libavutil 2>/dev/null)
+-FFMPEG_LIBS := $(shell pkg-config --libs libavformat libavcodec libavutil 2>/dev/null)
++FFMPEG_CFLAGS := $(shell pkg-config --cflags libavformat libavcodec libavutil libavdevice libswresample 2>/dev/null)
++FFMPEG_LIBS := $(shell pkg-config --libs libavformat libavcodec libavutil libavdevice libswresample 2>/dev/null)
++# Fallback if pkg-config returns empty (e.g. FreeBSD without .pc files)
++ifeq ($(strip $(FFMPEG_LIBS)),)
++FFMPEG_CFLAGS :=
++FFMPEG_LIBS   := -lavformat -lavcodec -lavutil -lavdevice -lswresample
++endif
+ FLUIDSYNTH_CFLAGS := $(shell pkg-config --cflags fluidsynth 2>/dev/null)
+ FLUIDSYNTH_LIBS := $(shell pkg-config --libs fluidsynth 2>/dev/null)
+ 
+-- 
+2.47.3
+

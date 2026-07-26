@@ -102,3 +102,27 @@ CI checkout of the component under test, symlinked into `Library/Sources/`):
 ```
 SKIP_REPOS="gershwin-workspace gershwin-terminal" /Developer/Library/Scripts/checkout.sh
 ```
+
+## Building against a development or feature branch
+
+By default `checkout.sh` clones each repository's default branch. Set `BRANCH`
+to build against another branch instead — most commonly a `dev` branch holding
+work in progress *before it lands in the default branch*:
+
+```
+BRANCH=dev /Developer/Library/Scripts/checkout.sh
+```
+
+`BRANCH` is generic — any branch name works — so it doubles as a tool for
+testing a feature branch across repositories:
+
+```
+BRANCH=my-feature /Developer/Library/Scripts/checkout.sh
+```
+
+For each repository that **has** the named branch, it is cloned/checked out on
+that branch; repositories **without** it fall back to their default branch, so a
+partial rollout (where only some repos have the branch yet) just works. The run
+logs which repository used the branch and prints a summary at the end. Leaving
+`BRANCH` unset keeps the previous behaviour, and `BRANCH` can be combined with
+`PINNED` and `SKIP_REPOS`.

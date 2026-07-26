@@ -3,6 +3,12 @@ set -e
 
 # Enable pinned commits with:
 #   PINNED=1 ./Library/Scripts/checkout.sh
+#
+# Build against a feature branch where it exists (e.g. a "dev" channel) with:
+#   BRANCH=dev ./Library/Scripts/checkout.sh
+# For each repo that HAS the branch on its remote it is cloned/checked out;
+# repos without it fall back to their default branch. Unset (the default)
+# leaves behaviour identical to before.
 
 PINNED="${PINNED:-0}"
 
@@ -12,6 +18,13 @@ PINNED="${PINNED:-0}"
 # the repo under test.
 SKIP_REPOS="${SKIP_REPOS:-}"
 SKIP_REPOS=$(printf '%s' "$SKIP_REPOS" | tr ',' ' ')
+
+# Optional branch to prefer for every repo that has it (e.g. BRANCH=dev). A repo
+# without the branch silently falls back to its default branch, so a partial
+# rollout works. Independent of PINNED: the pinned upstream libs don't carry
+# such a branch, so their pins are unaffected.
+BRANCH="${BRANCH:-}"
+ON_BRANCH=""     # repos actually placed on $BRANCH (for the end-of-run summary)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPOS_DIR="$SCRIPT_DIR/../Sources"
@@ -24,6 +37,7 @@ https://github.com/gnustep/libs-base.git
 https://github.com/gnustep/libs-gui.git
 https://github.com/gnustep/libs-back.git
 https://github.com/gnustep/libs-av.git
+https://github.com/gnustep/libs-steptalk.git
 https://github.com/gershwin-desktop/gershwin-system.git
 https://github.com/gershwin-desktop/gershwin-workspace.git
 https://github.com/gershwin-desktop/gershwin-systempreferences.git
@@ -48,20 +62,50 @@ for REPO in $REPOS; do
             ;;
     esac
 
+    # Resolve which branch to use for this repo. $BRANCH is generic — any branch
+    # name works (e.g. BRANCH=dev, or a feature branch you want to test). Probed
+    # in the parent shell (not a subshell) so we can print a summary at the end.
+    # A repo that doesn't have the branch falls back to its default branch.
+    USE_BRANCH=""
+    if [ -n "$BRANCH" ]; then
+        if git ls-remote --exit-code --heads "$REPO" "$BRANCH" >/dev/null 2>&1; then
+            USE_BRANCH="$BRANCH"
+            ON_BRANCH="$ON_BRANCH $NAME"
+        else
+            echo "  $NAME: no '$BRANCH' branch — using default branch"
+        fi
+    fi
+
     if [ -d "$NAME/.git" ]; then
         echo "Updating $NAME..."
         (
             cd "$NAME"
             git fetch --all --tags
+            if [ -n "$USE_BRANCH" ]; then
+                echo "  $NAME: checking out branch '$USE_BRANCH'"
+                git checkout "$USE_BRANCH"
+            fi
             if [ "$PINNED" -eq 0 ]; then
                 git pull --ff-only
             fi
         )
     else
         echo "Cloning $NAME..."
-        git clone "$REPO"
+        if [ -n "$USE_BRANCH" ]; then
+            echo "  $NAME: cloning branch '$USE_BRANCH'"
+        fi
+        git clone ${USE_BRANCH:+--branch "$USE_BRANCH"} "$REPO"
     fi
 done
+
+# Summary of which repos were placed on $BRANCH (only when BRANCH is in play).
+if [ -n "$BRANCH" ]; then
+    if [ -n "$ON_BRANCH" ]; then
+        echo "Branch '$BRANCH' used for:$ON_BRANCH"
+    else
+        echo "No repository has a '$BRANCH' branch — all on their default branch."
+    fi
+fi
 
 # Apply pinned commits if requested
 if [ "$PINNED" -eq 1 ]; then
@@ -82,6 +126,8 @@ if [ "$PINNED" -eq 1 ]; then
     checkout_commit libs-gui                     8be638c
     checkout_commit swift-corelibs-libdispatch   4876f91
     checkout_commit tools-make                   50cf961
+    checkout_commit libs-steptalk                2b57b46
+
 fi
 
 # The following do not seeem to be causing showstoppers currently

@@ -1,8 +1,11 @@
 #!/bin/sh
 set -e
 
-# Enable pinned commits with:
-#   PINNED=1 ./Library/Scripts/checkout.sh
+# The upstream (non-Gershwin) libraries are pinned by default, so the tree we
+# build is the tree Library/Patches/ was written against. Track their moving
+# HEADs instead — e.g. to check whether a pin can be advanced — with:
+#   PINNED=0 ./Library/Scripts/checkout.sh
+# Gershwin's own repositories are never pinned; they always track their branch.
 #
 # Build against a feature branch where it exists (e.g. a "dev" channel) with:
 #   BRANCH=dev ./Library/Scripts/checkout.sh
@@ -10,7 +13,7 @@ set -e
 # repos without it fall back to their default branch. Unset (the default)
 # leaves behaviour identical to before.
 
-PINNED="${PINNED:-0}"
+PINNED="${PINNED:-1}"
 
 # Repositories to skip cloning/updating, given as a space- or comma-separated
 # list of repo names (e.g. SKIP_REPOS="gershwin-workspace"). Useful when the
@@ -49,6 +52,34 @@ https://github.com/gershwin-desktop/gershwin-components.git
 https://github.com/gershwin-desktop/gershwin-assets.git
 "
 
+# Pinned commits, as "<repo name> <commit>". These are upstream libraries; we pin
+# them so we don't develop against a moving target and so the patches under
+# Library/Patches/ keep applying. Every entry here must be a non-Gershwin repo —
+# Gershwin's own repositories track their branch and are deliberately absent.
+# Refreshed 2026-07-26. Every patch under Library/Patches/ was dry-run against
+# these commits. libs-gui is held a day behind its HEAD: dropdown-tracking.patch
+# does not apply to the 2026-07-26 commits.
+PINS="
+libobjc2                    c9f4002
+libs-back                   bbcc3de
+libs-base                   5bda522
+libs-gui                    8f804fd
+swift-corelibs-libdispatch  95f592a
+tools-make                  4e31a03
+libs-av                     26566e2
+libs-steptalk               2b57b46
+"
+
+# Echo the pinned commit for repo $1, or nothing if the repo is not pinned.
+pin_for() {
+    echo "$PINS" | while read -r _name _commit _rest; do
+        if [ "$_name" = "$1" ]; then
+            echo "$_commit"
+            break
+        fi
+    done
+}
+
 mkdir -p "$REPOS_DIR"
 cd "$REPOS_DIR"
 
@@ -76,6 +107,13 @@ for REPO in $REPOS; do
         fi
     fi
 
+    # Only a repo that is about to be moved onto a pin skips the pull; everything
+    # else (all of Gershwin's own repos) still fast-forwards as it always did.
+    PIN=""
+    if [ "$PINNED" -eq 1 ]; then
+        PIN=$(pin_for "$NAME")
+    fi
+
     if [ -d "$NAME/.git" ]; then
         echo "Updating $NAME..."
         (
@@ -85,7 +123,23 @@ for REPO in $REPOS; do
                 echo "  $NAME: checking out branch '$USE_BRANCH'"
                 git checkout "$USE_BRANCH"
             fi
-            if [ "$PINNED" -eq 0 ]; then
+            if [ -z "$PIN" ]; then
+                # An earlier pinned run leaves the repo on a detached HEAD, and
+                # --ff-only then has no branch to advance. Put it back on its
+                # default branch first, so PINNED=0 un-pins an existing tree
+                # rather than silently leaving it at the old pin.
+                if [ -z "$USE_BRANCH" ] && ! git symbolic-ref -q HEAD >/dev/null; then
+                    DEFAULT_BRANCH=$(git symbolic-ref -q --short refs/remotes/origin/HEAD || true)
+                    if [ -z "$DEFAULT_BRANCH" ]; then
+                        git remote set-head origin -a >/dev/null 2>&1 || true
+                        DEFAULT_BRANCH=$(git symbolic-ref -q --short refs/remotes/origin/HEAD || true)
+                    fi
+                    DEFAULT_BRANCH="${DEFAULT_BRANCH#origin/}"
+                    if [ -n "$DEFAULT_BRANCH" ]; then
+                        echo "  $NAME: detached — returning to '$DEFAULT_BRANCH'"
+                        git checkout "$DEFAULT_BRANCH"
+                    fi
+                fi
                 git pull --ff-only
             fi
         )
@@ -107,40 +161,37 @@ if [ -n "$BRANCH" ]; then
     fi
 fi
 
-# Apply pinned commits if requested
+# Apply the pinned commits (the default; PINNED=0 opts out). A repo listed in
+# SKIP_REPOS was never cloned here, so it has nothing to pin.
 if [ "$PINNED" -eq 1 ]; then
     echo "Checking out pinned commits..."
 
-    checkout_commit() {
-        REPO="$1"
-        COMMIT="$2"
+    # Fed by redirection rather than a pipe so `set -e` still applies to the body.
+    while read -r NAME COMMIT _rest; do
+        [ -n "$NAME" ] || continue
+        [ -d "$NAME/.git" ] || continue
+        echo "  $NAME -> $COMMIT"
         (
-            cd "$REPO"
+            cd "$NAME"
             git checkout "$COMMIT"
         )
-    }
-    # These are upstream libraries, we pin them in order to not develop for a moving target
-    checkout_commit libobjc2                     4148a3d
-    checkout_commit libs-back                    bf3b3ce # Patch by okt
-    checkout_commit libs-base                    caa0816
-    checkout_commit libs-gui                     8be638c
-    checkout_commit swift-corelibs-libdispatch   4876f91
-    checkout_commit tools-make                   50cf961
-    checkout_commit libs-av                      922d3c3
-    checkout_commit libs-steptalk                2b57b46
-
+    done <<EOF
+$PINS
+EOF
 fi
 
-# The following do not seeem to be causing showstoppers currently
-# checkout_commit gershwin-windowmanager       1f3cc1c
-# checkout_commit gershwin-components          3395d99
-# checkout_commit gershwin-eau-theme           4babcb0
-# checkout_commit gershwin-assets              4deb482
-# checkout_commit gershwin-workspace           1bc3b98
-# checkout_commit gershwin-system              cdeafb6
-# checkout_commit gershwin-systempreferences   8d49f50
-# checkout_commit gershwin-terminal            71124e3
-# checkout_commit gershwin-textedit            3df6db8
+# Gershwin's own repositories are intentionally NOT in $PINS: pinning them would
+# mean the build no longer picks up our own work. These commits are kept only as
+# a record of a known-good set. Do not move them into $PINS.
+# gershwin-windowmanager       1f3cc1c
+# gershwin-components          3395d99
+# gershwin-eau-theme           4babcb0
+# gershwin-assets              4deb482
+# gershwin-workspace           1bc3b98
+# gershwin-system              cdeafb6
+# gershwin-systempreferences   8d49f50
+# gershwin-terminal            71124e3
+# gershwin-textedit            3df6db8
 
 # Lower CMake version requirements
 # Use a temp-file approach for in-place sed to avoid -i portability issues

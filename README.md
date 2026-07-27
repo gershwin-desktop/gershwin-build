@@ -92,6 +92,26 @@ make corelibs
 make workspace
 ```
 
+## Pinned upstream libraries
+
+The upstream libraries (`libobjc2`, `tools-make`, `libs-base`, `libs-gui`,
+`libs-back`, `libs-av`, `libs-steptalk`, `swift-corelibs-libdispatch`) are
+checked out at pinned commits by default, so that the sources we build are the
+sources the patches in `Library/Patches/` were written against. Without the pins
+an upstream commit can silently break a patch and fail the build.
+
+Gershwin's own repositories are **never** pinned — they always track their
+branch, so the build picks up our work as it lands.
+
+To check whether a pin can be advanced, build against the upstream HEADs
+instead:
+
+```
+PINNED=0 /Developer/Library/Scripts/checkout.sh
+```
+
+The pins live in the `PINS` list at the top of `checkout.sh`.
+
 ## Skipping repositories during checkout
 
 `checkout.sh` clones every repository the build needs. Set `SKIP_REPOS` to a

@@ -39,3 +39,4 @@ mDNSResponder
 libtool
 libvncserver
 freerdp
+ffmpeg

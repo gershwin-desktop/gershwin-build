@@ -31,11 +31,14 @@ _apply_one() {
     for f in "$patch_dir"/*.patch; do
         [ -f "$f" ] || continue
 
-        if patch -p1 -N -t -i "$f" >/dev/null 2>&1; then
+        echo "  $(basename "$f")..."
+        err=$(patch -p1 -N -t -i "$f" 2>&1 >/dev/null)
+        if [ $? -eq 0 ]; then
             applied=$((applied + 1))
         elif patch -p1 -R -f --dry-run -t -i "$f" >/dev/null 2>&1; then
             already=$((already + 1))
         else
+            echo "$err"
             failed=$((failed + 1))
         fi
 

@@ -38,3 +38,4 @@ automake
 libtool
 libvncserver
 freerdp
+ffmpeg

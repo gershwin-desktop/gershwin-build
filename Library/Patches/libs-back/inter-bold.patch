@@ -1,0 +1,48 @@
+diff --git a/Source/art/FTFontEnumerator.m b/Source/art/FTFontEnumerator.m
+index 3cc632b..500a07f 100644
+--- a/Source/art/FTFontEnumerator.m
++++ b/Source/art/FTFontEnumerator.m
+@@ -481,6 +481,8 @@ static void load_font_configuration(void)
+ 
+ - (NSString *) defaultSystemFontName
+ {
++  if ([fcfg_allFontNames containsObject: @"Inter"])
++    return @"Inter";
+   if ([fcfg_allFontNames containsObject: @"BitstreamVeraSans-Roman"])
+     return @"BitstreamVeraSans-Roman";
+   if ([fcfg_allFontNames containsObject: @"FreeSans"])
+@@ -490,6 +492,8 @@ static void load_font_configuration(void)
+ 
+ - (NSString *) defaultBoldSystemFontName
+ {
++  if ([fcfg_allFontNames containsObject: @"Inter-Bold"])
++    return @"Inter-Bold";
+   if ([fcfg_allFontNames containsObject: @"BitstreamVeraSans-Bold"])
+     return @"BitstreamVeraSans-Bold";
+   if ([fcfg_allFontNames containsObject: @"FreeSansBold"])
+diff --git a/Source/fontconfig/FCFontEnumerator.m b/Source/fontconfig/FCFontEnumerator.m
+index cfb51c1..c5a0ede 100644
+--- a/Source/fontconfig/FCFontEnumerator.m
++++ b/Source/fontconfig/FCFontEnumerator.m
+@@ -430,6 +430,10 @@ static NSArray *faFromFc(FcPattern *pat)
+ 
+ - (NSString *) defaultSystemFontName
+ {
++  if ([allFontNames containsObject: @"Inter"])
++    {
++      return @"Inter";
++    }
+   if ([allFontNames containsObject: @"DejaVuSans"])
+     {
+       return @"DejaVuSans";
+@@ -455,6 +459,10 @@ static NSArray *faFromFc(FcPattern *pat)
+ 
+ - (NSString *) defaultBoldSystemFontName
+ {
++  if ([allFontNames containsObject: @"Inter-Bold"])
++    {
++      return @"Inter-Bold";
++    }
+   if ([allFontNames containsObject: @"DejaVuSans-Bold"])
+     {
+       return @"DejaVuSans-Bold";

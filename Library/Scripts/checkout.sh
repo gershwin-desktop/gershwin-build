@@ -56,14 +56,17 @@ https://github.com/gershwin-desktop/gershwin-assets.git
 # them so we don't develop against a moving target and so the patches under
 # Library/Patches/ keep applying. Every entry here must be a non-Gershwin repo —
 # Gershwin's own repositories track their branch and are deliberately absent.
+# Refreshed 2026-07-26. Every patch under Library/Patches/ was dry-run against
+# these commits. libs-gui is held a day behind its HEAD: dropdown-tracking.patch
+# does not apply to the 2026-07-26 commits.
 PINS="
-libobjc2                    4148a3d
-libs-back                   bf3b3ce # Patch by okt
-libs-base                   caa0816
-libs-gui                    8be638c
-swift-corelibs-libdispatch  4876f91
-tools-make                  50cf961
-libs-av                     922d3c3
+libobjc2                    c9f4002
+libs-back                   bbcc3de
+libs-base                   5bda522
+libs-gui                    8f804fd
+swift-corelibs-libdispatch  95f592a
+tools-make                  4e31a03
+libs-av                     26566e2
 libs-steptalk               2b57b46
 "
 

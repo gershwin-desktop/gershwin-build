@@ -1,17 +1,3 @@
 # Cloned source repos (created by checkout.sh)
-Library/Sources/swift-corelibs-libdispatch/
-Library/Sources/libobjc2/
-Library/Sources/tools-make/
-Library/Sources/libs-base/
-Library/Sources/libs-gui/
-Library/Sources/libs-back/
-Library/Sources/gershwin-system/
-Library/Sources/gershwin-workspace/
-Library/Sources/gershwin-systempreferences/
-Library/Sources/gershwin-eau-theme/
-Library/Sources/gershwin-terminal/
-Library/Sources/gershwin-textedit/
-Library/Sources/gershwin-windowmanager/
-Library/Sources/gershwin-components/
-Library/Sources/gershwin-assets/
+Library/Sources/*
 font-*

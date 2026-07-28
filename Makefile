@@ -43,8 +43,22 @@ components: check_root
 
 uninstall: check_root
 	@if [ -d "/usr/lib/system" ]; then \
-	  echo "NextBSD system detected (/usr/lib/system exists)."; \
-	  echo "Cannot uninstall /System on NextBSD as it may contain system libraries."; \
+	  echo "NextBSD system detected. Performing selective uninstall..."; \
+	  if [ -d "/System/Applications" ]; then \
+	    rm -rf /System/Applications; \
+	    echo "Removed /System/Applications"; \
+	  fi; \
+	  for dir in /System/Library/*/; do \
+	    name=$$(basename "$$dir"); \
+	    case "$$name" in \
+	      Caches|Extensions|LaunchDaemons) \
+	        echo "Keeping /System/Library/$$name";; \
+	      *) \
+	        rm -rf "$$dir"; \
+	        echo "Removed /System/Library/$$name";; \
+	    esac; \
+	  done; \
+	  echo "Selective uninstall complete."; \
 	elif [ -d "/System/Library" ]; then \
 	  rm -rf /System >/dev/null 2>&1 || true; \
 	  echo "Removed GNUstep System Domain /System"; \
@@ -52,3 +66,4 @@ uninstall: check_root
 	else \
 	  echo "GNUstep appears to be already uninstalled. Nothing was removed."; \
 	fi
+

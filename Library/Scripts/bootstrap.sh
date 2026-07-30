@@ -55,7 +55,7 @@ case "$OS_ID" in
     fi
     ;;
 
-  debian|devuan|ubuntu)
+  debian|devuan|ubuntu|zorin)
     while IFS= read -r pkg || [ -n "$pkg" ]; do
       pkg="${pkg%%#*}"           # strip comments after #
       pkg="$(echo "$pkg" | xargs)" # trim whitespace

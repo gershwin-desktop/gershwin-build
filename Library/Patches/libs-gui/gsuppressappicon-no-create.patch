@@ -1,0 +1,106 @@
+diff --git a/Source/NSApplication.m b/Source/NSApplication.m
+index a2a521f5f..67310abae 100644
+--- a/Source/NSApplication.m
++++ b/Source/NSApplication.m
+@@ -3605,7 +3605,10 @@ struct _DelegateWrapper
+       
+       _app_is_running = NO;
+ 
+-      GSRemoveIcon(_app_icon_window);
++      if (_app_icon_window != nil)
++        {
++          GSRemoveIcon(_app_icon_window);
++        }
+       [[self windows] makeObjectsPerformSelector: @selector(close)];
+       [NSCursor setHiddenUntilMouseMoves: NO];
+       
+@@ -3937,20 +3940,16 @@ struct _DelegateWrapper
+ 
+ - (void) _appIconInit
+ {
+-  NSAppIconView	*iv;
+-  NSUInteger	mask = NSIconWindowMask;
+-  BOOL  	suppress;
+-  
+-  suppress = [[NSUserDefaults standardUserDefaults]
+-    boolForKey: @"GSSuppressAppIcon"];
+-#if	MINI_ICON
+-  if (suppress)
++  if ([[[NSUserDefaults standardUserDefaults]
++    objectForKey: @"GSSuppressAppIcon"] isEqual: @NO] == NO)
+     {
+-      mask = NSMiniaturizableWindowMask;
++      return;
+     }
+-#endif
+-  
+-  _app_icon_window = [[NSIconWindow alloc] initWithContentRect: NSZeroRect 
++
++  NSAppIconView	*iv;
++  NSUInteger	mask = NSIconWindowMask;
++
++  _app_icon_window = [[NSIconWindow alloc] initWithContentRect: NSZeroRect
+ 				styleMask: mask
+ 				  backing: NSBackingStoreRetained
+ 				    defer: NO
+@@ -3976,12 +3975,9 @@ struct _DelegateWrapper
+     RELEASE(iv);
+   }
+ 
+-  if (NO == suppress)
+-    {
+-      /* The icon window is not suppressed ... display it.
+-       */
+-      [_app_icon_window orderFrontRegardless];
+-    }
++  /* The icon window is not suppressed ... display it.
++   */
++  [_app_icon_window orderFrontRegardless];
+ }
+ 
+ - (NSDictionary*) _notificationUserInfo
+diff --git a/Source/NSWindow.m b/Source/NSWindow.m
+index b091679c8..d65e65cc1 100644
+--- a/Source/NSWindow.m
++++ b/Source/NSWindow.m
+@@ -3364,21 +3364,25 @@ checkCursorRectanglesExited(NSView *theView,  NSEvent *theEvent, NSPoint lastPoi
+    */
+   if (_counterpart == 0 && [srv appOwnsMiniwindow])
+     {
+-      NSWindow *mini;
+-      NSMiniWindowView *v;
+-      NSRect rect = NSMakeRect(0, 0, iconSize.height, iconSize.width);
+-
+-      mini = [[NSMiniWindow alloc] initWithContentRect: rect
+-                                             styleMask: NSMiniWindowMask
+-                                               backing: NSBackingStoreBuffered
+-                                                 defer: NO];
+-      mini->_counterpart = [self windowNumber];
+-      _counterpart = [mini windowNumber];
+-      v = [[NSMiniWindowView alloc] initWithFrame: rect];
+-      [v setImage: [self miniwindowImage]];
+-      [v setTitle: [self miniwindowTitle]];
+-      [mini setContentView: v];
+-      RELEASE(v);
++      if ([[[NSUserDefaults standardUserDefaults]
++        objectForKey: @"GSSuppressAppIcon"] isEqual: @NO])
++        {
++          NSWindow *mini;
++          NSMiniWindowView *v;
++          NSRect rect = NSMakeRect(0, 0, iconSize.height, iconSize.width);
++
++          mini = [[NSMiniWindow alloc] initWithContentRect: rect
++                                                 styleMask: NSMiniWindowMask
++                                                   backing: NSBackingStoreBuffered
++                                                     defer: NO];
++          mini->_counterpart = [self windowNumber];
++          _counterpart = [mini windowNumber];
++          v = [[NSMiniWindowView alloc] initWithFrame: rect];
++          [v setImage: [self miniwindowImage]];
++          [v setTitle: [self miniwindowTitle]];
++          [mini setContentView: v];
++          RELEASE(v);
++        }
+     }
+   [self _lossOfKeyOrMainWindow];
+   [srv miniwindow: _windowNum];

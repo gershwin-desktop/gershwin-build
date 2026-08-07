@@ -29,7 +29,7 @@ jobs:
           run: |
             set -e
             ./Library/Scripts/bootstrap.sh
-            BRANCH=dev ./Library/Scripts/checkout.sh
+            BRANCH=$([ "${{ github.base_ref }}" = "dev" ] || [ "${{ github.ref }}" = "refs/heads/dev" ] && echo dev) ./Library/Scripts/checkout.sh
             make install
             mkdir -p artifacts/FreeBSD/14/amd64
             tar -C / -cJf artifacts/FreeBSD/14/amd64/system.txz /System
@@ -63,7 +63,7 @@ jobs:
         run: ./Library/Scripts/bootstrap.sh
 
       - name: Checkout sources
-        run: BRANCH=dev ./Library/Scripts/checkout.sh
+        run: BRANCH=$([ "${{ github.base_ref }}" = "dev" ] || [ "${{ github.ref }}" = "refs/heads/dev" ] && echo dev) ./Library/Scripts/checkout.sh
 
       - name: Build and install
         run: make install
@@ -108,7 +108,7 @@ jobs:
         run: ./Library/Scripts/bootstrap.sh
 
       - name: Checkout sources
-        run: BRANCH=dev ./Library/Scripts/checkout.sh
+        run: BRANCH=$([ "${{ github.base_ref }}" = "dev" ] || [ "${{ github.ref }}" = "refs/heads/dev" ] && echo dev) ./Library/Scripts/checkout.sh
 
       - name: Build and install
         run: make install
@@ -158,7 +158,7 @@ jobs:
           run: |
             set -e
             ./Library/Scripts/bootstrap.sh
-            BRANCH=dev ./Library/Scripts/checkout.sh
+            BRANCH=$([ "${{ github.base_ref }}" = "dev" ] || [ "${{ github.ref }}" = "refs/heads/dev" ] && echo dev) ./Library/Scripts/checkout.sh
             make install
             mkdir -p artifacts/OpenBSD/7.8/amd64
             # OpenBSD's base tar has no -J (xz); use -z (gzip), which it supports.

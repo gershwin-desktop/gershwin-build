@@ -1006,12 +1006,30 @@ static void SetErr(NSString **err, NSString *m)
     return NO;
   usleep (250000);   /* let the dialog open and take focus */
 
-  /* Find the CompletionField in the FRONTMOST visible window (the Run dialog
-   * itself; the Workspace also has a preferences CompletionField, so pick the
-   * one whose window is a visible dialog near the top of the screen). */
+  NSString *fieldID = [self clickFrontmostCompletionField: err];
+  if (fieldID == nil)
+    { SetErr(err, @"run: no CompletionField found (Run dialog not open?)"); return NO; }
+
+  NSArray *typeArg = [NSArray arrayWithObjects:
+    [NSString stringWithFormat: @"--pid=%d", pid_], @"sendkeys", command, nil];
+  [self runCollect: typeArg error: nil];
+
+  NSArray *pressArg = [NSArray arrayWithObjects:
+    [NSString stringWithFormat: @"--pid=%d", pid_], @"press", nil];
+  return [self runCollect: pressArg error: err] != nil;
+}
+
+/* Click the CompletionField of the dialog that is currently up (the Run /
+ * Go to Folder dialog) so it has the X focus, and return its object id, or
+ * nil when no visible CompletionField is present (the Workspace preferences
+ * CompletionField stays hidden, so a visible one only exists while a dialog
+ * is open).  sendkeys types into the focused field, so dialogs that do not
+ * focus their field themselves need this click first. */
+- (NSString *)clickFrontmostCompletionField:(NSString **)err
+{
   NSString *tree = [self runCollect: [self argvForSubcommand: @"get_full_tree"]
                               error: err];
-  if (!tree) return NO;
+  if (!tree) return nil;
   NSString *fieldID = nil;
   CGFloat bestY = -1;
   for (NSString *line in [tree componentsSeparatedByString: @"\n"])
@@ -1027,19 +1045,11 @@ static void SetErr(NSString **err, NSString *m)
         { bestY = (CGFloat)r.origin.y; fieldID = [f objectAtIndex: 7]; }
     }
   if (fieldID == nil)
-    { SetErr(err, @"run: no CompletionField found (Run dialog not open?)"); return NO; }
-
+    return nil;
   NSArray *clickArg = [NSArray arrayWithObjects:
     [NSString stringWithFormat: @"--pid=%d", pid_], @"click", fieldID, nil];
   [self runCollect: clickArg error: nil];
-
-  NSArray *typeArg = [NSArray arrayWithObjects:
-    [NSString stringWithFormat: @"--pid=%d", pid_], @"sendkeys", command, nil];
-  [self runCollect: typeArg error: nil];
-
-  NSArray *pressArg = [NSArray arrayWithObjects:
-    [NSString stringWithFormat: @"--pid=%d", pid_], @"press", nil];
-  return [self runCollect: pressArg error: err] != nil;
+  return fieldID;
 }
 
 /* Click/double-click/right-click an object by its ID with real X11 events. */
@@ -1127,8 +1137,13 @@ static void SetErr(NSString **err, NSString *m)
 
 - (BOOL)type:(NSString *)text error:(NSString **)err
 {
-  /* sendkeys types into the focused field directly; it is a global X11
-   * action, so no target app is strictly needed. */
+  /* sendkeys types into the focused field directly.  A dialog that is up
+   * (Run / Go to Folder) does not always give its CompletionField the X
+   * focus, so click it first; this makes `type` right after `wait until
+   * modal` land in the field (mirrors runCommandInRunDialog:).  When no
+   * visible CompletionField exists there is nothing to focus and sendkeys
+   * behaves as before. */
+  [self clickFrontmostCompletionField: nil];
   NSString *out = [self runCollect: [NSArray arrayWithObjects:
     [NSString stringWithFormat: @"--pid=%d", pid_], @"sendkeys", text, nil]
     error: err];

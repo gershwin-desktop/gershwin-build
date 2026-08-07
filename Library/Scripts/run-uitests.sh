@@ -16,6 +16,18 @@ WORKDIR="$(cd "$(dirname "$0")/../.." && pwd)"
 REPOS_DIR="$WORKDIR/Library/Sources"
 XVFB_PID=""
 
+# 0. Fonts.  The Gershwin desktop fonts live in /System/Library/Fonts and are
+#    indexed through fontconfig via /System/Library/Preferences/fonts.conf (the
+#    same setup gershwin-system's Gershwin.sh exports).  A stock CI container's
+#    fontconfig does not look there, so without this the desktop apps cannot
+#    resolve any font and the UI tests fail on rendering/text.  Set the config
+#    before anything that launches a Gershwin app so the whole tree inherits it.
+export FONTCONFIG_PATH=/System/Library/Preferences
+export FONTCONFIG_FILE=$FONTCONFIG_PATH/fonts.conf
+if command -v fc-cache >/dev/null 2>&1; then
+  fc-cache -f /System/Library/Fonts >/dev/null 2>&1
+fi
+
 # Start a background process that must outlive this shell.  setsid detaches it
 # into its own session so a wrapper shell (GitHub Actions) cannot reap it; plain
 # '&' would leave it in the shell's process group.

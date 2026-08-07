@@ -1,3 +1,10 @@
 # Cloned source repos (created by checkout.sh)
 Library/Sources/*
 font-*
+
+# DriveUI build artifacts (obj dirs, built bundle)
+DriveUI/obj/
+DriveUI/drive_ui/obj/
+DriveUI/uitest/obj/
+DriveUI/uitest/Tests/obj/
+DriveUI/DriveUI.bundle/

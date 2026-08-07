@@ -303,6 +303,21 @@ build_components() {
   $MAKE_CMD clean
 }
 
+build_driveui() {
+  # DriveUI tooling (the runtime DriveUI.bundle, the drive_ui CLI and the
+  # run_uitest / uitest_tests harness) lives in this repository rather than
+  # under Library/Sources, so build it from here.  Each piece is installed
+  # separately; the bundle and the tools must end up in /System before the
+  # desktop is started for "make test".
+  cd "$WORKDIR/DriveUI"
+  $MAKE_CMD -j"$CPUS" || exit 1
+  $MAKE_CMD install
+  $MAKE_CMD clean
+  ( cd drive_ui && $MAKE_CMD -j"$CPUS" && $MAKE_CMD install && $MAKE_CMD clean ) || exit 1
+  ( cd uitest && $MAKE_CMD -j"$CPUS" && $MAKE_CMD install && $MAKE_CMD clean ) || exit 1
+  ( cd uitest/Tests && $MAKE_CMD -j"$CPUS" && $MAKE_CMD install && $MAKE_CMD clean ) || exit 1
+}
+
 # Dispatch on the requested target.  Default "all" reproduces the original
 # end-to-end System Domain install in the exact same order.
 TARGET="${1:-all}"
@@ -338,6 +353,15 @@ case "$TARGET" in
     ensure_gnustep_env
     build_components
     ;;
+  tooling)
+    ensure_gnustep_env
+    build_driveui
+    ;;
+  test)
+    ensure_gnustep_env
+    build_driveui
+    sh "$WORKDIR/Library/Scripts/run-uitests.sh"
+    ;;
   all)
     build_corelibs
     build_workspace
@@ -347,10 +371,11 @@ case "$TARGET" in
     build_textedit
     build_windowmanager
     build_components
+    build_driveui
     ;;
   *)
     echo "Unknown target: $TARGET"
-    echo "Valid targets: corelibs workspace systempreferences eau-theme terminal textedit windowmanager components all"
+    echo "Valid targets: corelibs workspace systempreferences eau-theme terminal textedit windowmanager components tooling test all"
     exit 1
     ;;
 esac

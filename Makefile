@@ -41,6 +41,15 @@ windowmanager: check_root
 components: check_root
 	@FROM_MAKEFILE=1 sh ./Library/Scripts/install-system-domain.sh components
 
+# DriveUI tooling (bundle, drive_ui, run_uitest, uitest_tests harness).
+tooling: check_root
+	@FROM_MAKEFILE=1 sh ./Library/Scripts/install-system-domain.sh tooling
+
+# Build the DriveUI tooling and run the UI test suite against a built desktop
+# (Menu/Workspace/WindowManager must be installed; run "make all" first).
+test: check_root
+	@FROM_MAKEFILE=1 sh ./Library/Scripts/install-system-domain.sh test
+
 uninstall: check_root
 	@if [ -d "/usr/lib/system" ]; then \
 	  echo "NextBSD system detected. Performing selective uninstall..."; \

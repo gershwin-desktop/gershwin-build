@@ -1,0 +1,28 @@
+#!/usr/bin/env run_uitest
+# Demonstrates the declarative control-flow commands (repeat, if/else,
+# macro/call) and that they need no running application.
+#
+# Run with: run_uitest Tests/control/control_flow.uitest
+set ATTEMPTS="3"
+
+macro report
+  if not window "example-window-nx"
+    log "target window present"
+  else
+    log "target window absent"
+  end
+end
+
+call report
+
+repeat ${ATTEMPTS}
+  log "attempt"
+end
+
+if not dialog "never-open-xyz"
+  log "dialog closed"
+else
+  log "dialog open"
+end
+
+log "control flow done"

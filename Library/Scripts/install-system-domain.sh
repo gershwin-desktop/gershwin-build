@@ -361,6 +361,11 @@ case "$TARGET" in
     ensure_gnustep_env
     build_driveui
     sh "$WORKDIR/Library/Scripts/run-uitests.sh"
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+      echo "UI tests failed (exit $rc)" >&2
+      exit "$rc"
+    fi
     ;;
   all)
     build_corelibs

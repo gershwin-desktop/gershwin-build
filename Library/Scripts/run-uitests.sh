@@ -66,16 +66,44 @@ done
 # Let the desktop settle.
 sleep 5
 
-# 3. Collect every repository's Tests/ directory that contains .uitest scripts,
-#    plus the DriveUI control test shipped with the harness.
+# 3. Collect the Tests/ directories that belong to the built components.  Each
+#    component ships its uitest scripts under its own Tests/ directory (nested
+#    inside the component repo, e.g. gershwin-components/Menu/Tests), so walk
+#    the checked-out repos for .uitest files.  Drop directories nested inside
+#    another collected one (e.g. Menu/Tests/heavy is covered by Menu/Tests) so
+#    the harness does not enumerate a script twice.
+RAW_DIRS=$(for repo in "$REPOS_DIR"/gershwin-*
+  do
+    if [ -d "$repo" ]; then
+      files=$(find "$repo" -name '*.uitest' -type f 2>/dev/null)
+      if [ -n "$files" ]; then
+        echo "$files" | xargs -n1 dirname
+      fi
+    fi
+  done | sort -u)
+
 UITEST_SEARCH_DIRS=""
-for dir in "$REPOS_DIR"/gershwin-*/Tests "$WORKDIR/DriveUI/uitest/Tests/control"
+for d in $RAW_DIRS
 do
-  if [ -d "$dir" ] && find "$dir" -name '*.uitest' 2>/dev/null | grep -q .
-  then
-    UITEST_SEARCH_DIRS="$UITEST_SEARCH_DIRS${UITEST_SEARCH_DIRS:+:}$dir"
+  nested=0
+  for o in $RAW_DIRS
+  do
+    [ "$d" = "$o" ] && continue
+    case "$d" in
+      "$o"/*) nested=1 ;;
+    esac
+  done
+  if [ "$nested" -eq 0 ]; then
+    UITEST_SEARCH_DIRS="$UITEST_SEARCH_DIRS${UITEST_SEARCH_DIRS:+:}$d"
   fi
 done
+
+# The DriveUI control test ships with the harness.
+CONTROL="$WORKDIR/DriveUI/uitest/Tests/control"
+if [ -d "$CONTROL" ]; then
+  UITEST_SEARCH_DIRS="$UITEST_SEARCH_DIRS${UITEST_SEARCH_DIRS:+:}$CONTROL"
+fi
+
 export UITEST_SEARCH_DIRS
 export UI_TEST_LEVEL="${UI_TEST_LEVEL:-core}"
 echo "UITEST_SEARCH_DIRS=$UITEST_SEARCH_DIRS"

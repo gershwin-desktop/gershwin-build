@@ -55,7 +55,7 @@ jobs:
       - name: Install build prerequisites
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm base-devel git tree squashfs-tools
+          pacman -S --noconfirm base-devel git tree squashfs-tools xorg-server-xvfb xorg-xdpyinfo procps-ng
 
       - uses: actions/checkout@v4
 
@@ -67,6 +67,9 @@ jobs:
 
       - name: Build and install
         run: make install
+
+      - name: Run UI tests
+        run: make test
 
       - name: Package
         run: |
@@ -97,7 +100,7 @@ jobs:
       - name: Install build prerequisites
         run: |
           apt-get update
-          apt-get -y install git tree squashfs-tools
+          apt-get -y install git tree squashfs-tools xvfb x11-utils procps
 
       - uses: actions/checkout@v4
 
@@ -109,6 +112,9 @@ jobs:
 
       - name: Build and install
         run: make install
+
+      - name: Run UI tests
+        run: make test
 
       - name: Package
         run: |

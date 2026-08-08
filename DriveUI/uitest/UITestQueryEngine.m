@@ -211,6 +211,20 @@ static void DDSMenuNodeFree(DDSMenuNode *n)
       NSString *out = [self runCollect: [NSArray arrayWithObjects:
         [NSString stringWithFormat: @"--pid=%d", maybePid], @"app", nil]
         timeout: kToolTimeoutFast error: nil];
+      /* Diagnostic: log every socket we probed so a failed activation shows
+       * exactly which apps were alive and which answered, instead of just
+       * 'application X not running'. */
+      if (out != nil)
+        {
+          NSString *trimmed = [out stringByTrimmingCharactersInSet:
+            [NSCharacterSet newlineCharacterSet]];
+          NSLog(@"[resolveApplication] pid %d -> %@", maybePid,
+            ([trimmed length] ? trimmed : @"(empty reply)"));
+        }
+      else
+        {
+          NSLog(@"[resolveApplication] pid %d -> no reply (DriveUI server not answering)", maybePid);
+        }
       if (!out) continue;
       NSString *found = [out stringByTrimmingCharactersInSet:
         [NSCharacterSet newlineCharacterSet]];

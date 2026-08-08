@@ -683,8 +683,6 @@ static void WriteAll(int fd, const char *bytes)
                   NSBundle *b = [NSBundle mainBundle];
                   NSString *loc = [b localizedStringForKey: needle
                     value: needle table: nil];
-                  NSLog(@"[close_window] needle=%@ loc=%@ visible wins=%lu",
-                    needle, loc, (unsigned long)[[NSApp windows] count]);
                   NSArray *wins = [[NSApp windows] copy];
                   for (NSWindow *win in wins)
                     {

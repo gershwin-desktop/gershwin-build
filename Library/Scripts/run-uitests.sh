@@ -98,6 +98,30 @@ restore_appkit_bundles()
   fi
 }
 
+# Run a command as another user.  Prefer sudo; CI containers and BSD hosts
+# run as root without sudo installed, so fall back to su -m there.  Requires
+# root (or passwordless sudo) either way.
+run_as_user()
+{
+  _u="$1"; shift
+  if command -v sudo >/dev/null 2>&1; then
+    sudo -u "$_u" "$@"
+    return $?
+  fi
+  if [ "$(id -u)" = "0" ]; then
+    # su -c takes a single command string; quote each argument.
+    _cmd=""
+    for _a in "$@"; do
+      _esc=$(printf '%s' "$_a" | sed "s/'/'\\\\''/g")
+      _cmd="$_cmd '$_esc'"
+    done
+    su -m "$_u" -c "$_cmd"
+    return $?
+  fi
+  echo "error: need root or sudo to run as $_u" >&2
+  return 1
+}
+
 # Start a desktop component (Menu / WindowManager / Workspace) if it is not
 # already running.  $1 = the user the session runs as (empty = current user).
 # Restarting an already-running instance is avoided in session mode so the
@@ -112,7 +136,7 @@ start_desktop_component()
   fi
   if [ -x "$bin" ]; then
     if [ -n "$run_user" ]; then
-      start_bg sudo -u "$run_user" "$bin"
+      start_bg run_as_user "$run_user" "$bin"
     else
       start_bg "$bin"
     fi
@@ -122,19 +146,26 @@ start_desktop_component()
 }
 
 # Run a command in the session.  In isolated mode this is sudo to the test
-# user with the isolated environment.
+# user with the isolated environment.  GNUstep.sh is sourced inside the
+# isolated shell (not just for the desktop components) so every process the
+# tests spawn - the harness, run_uitest, apps it launches, and their children
+# such as the Build app's `make` - sees the GNUstep build env (GNUSTEP_MAKEFILES
+# and friends).  Without it the Build test's `make` could not find common.make.
 session_run()
 {
   if [ "$UITEST_SESSION" = "isolated" ]; then
-    sudo -u "$UITEST_ISOLATED_USER" env DISPLAY="$UITEST_ISOLATED_DISPLAY" \
-      HOME="/home/$UITEST_ISOLATED_USER" \
-      GNUSTEP_SYSTEM_ROOT=/System GNUSTEP_LOCAL_ROOT=/Local \
-      GNUSTEP_NETWORK_ROOT=/Network \
-      GNUSTEP_USER_ROOT="/home/$UITEST_ISOLATED_USER/.GNUstep" \
-      FONTCONFIG_FILE=/System/Library/Preferences/fonts.conf \
-      FONTCONFIG_PATH=/System/Library/Preferences \
-      PATH=/System/Library/Tools:/usr/bin:/bin \
-      "$@"
+    run_as_user "$UITEST_ISOLATED_USER" sh -c '
+      . /System/Library/Makefiles/GNUstep.sh
+      exec env DISPLAY="$UITEST_ISOLATED_DISPLAY" \
+        HOME="/home/uitest" \
+        GNUSTEP_SYSTEM_ROOT=/System GNUSTEP_LOCAL_ROOT=/Local \
+        GNUSTEP_NETWORK_ROOT=/Network \
+        GNUSTEP_USER_ROOT="/home/uitest/.GNUstep" \
+        FONTCONFIG_FILE=/System/Library/Preferences/fonts.conf \
+        FONTCONFIG_PATH=/System/Library/Preferences \
+        PATH=/System/Library/Tools:/usr/bin:/bin \
+        "$@"
+    ' _ "$@"
   else
     "$@"
   fi
@@ -148,7 +179,8 @@ if [ "$UITEST_SESSION" = "isolated" ]; then
   # Create the test user on demand (root or passwordless sudo required).
   if ! id "$UITEST_ISOLATED_USER" >/dev/null 2>&1; then
     echo "Creating test user '$UITEST_ISOLATED_USER'"
-    useradd -m -s /bin/bash "$UITEST_ISOLATED_USER"
+    # /bin/sh is guaranteed on every platform; bash is not (BSD builds).
+    useradd -m -s /bin/sh "$UITEST_ISOLATED_USER"
   fi
 
   # A fresh virtual display, open to local connections.
@@ -261,7 +293,12 @@ restore_appkit_bundles
 # it (the Workspace ignores it), so without this the next isolated run would
 # reuse stale processes and sockets.  SIGKILL the whole test user instead.
 if [ "$UITEST_SESSION" = "isolated" ]; then
-  sudo pkill -9 -u "$UITEST_ISOLATED_USER" 2>/dev/null || true
+  # pkill as root needs no sudo (BSD CI runs as root without sudo installed).
+  if [ "$(id -u)" = "0" ]; then
+    pkill -9 -u "$UITEST_ISOLATED_USER" 2>/dev/null || true
+  else
+    sudo pkill -9 -u "$UITEST_ISOLATED_USER" 2>/dev/null || true
+  fi
   sleep 1
 fi
 

@@ -25,7 +25,7 @@ jobs:
           mem: 4096
           prepare: |
             pkg update
-            pkg install -y git tree squashfs-tools xorg-vfbserver xdpyinfo fontconfig
+            pkg install -y git tree squashfs-tools xorg-vfbserver xdpyinfo fontconfig ffmpeg xterm lcms2
           run: |
             set -e
             ./Library/Scripts/bootstrap.sh
@@ -56,7 +56,7 @@ jobs:
       - name: Install build prerequisites
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm base-devel git tree squashfs-tools xorg-server-xvfb xorg-xdpyinfo procps-ng
+          pacman -S --noconfirm base-devel git tree squashfs-tools xorg-server-xvfb xorg-xdpyinfo procps-ng ffmpeg xterm lcms2
 
       - uses: actions/checkout@v4
 
@@ -101,7 +101,7 @@ jobs:
       - name: Install build prerequisites
         run: |
           apt-get update
-          apt-get -y install git tree squashfs-tools xvfb x11-utils procps
+          apt-get -y install git tree squashfs-tools xvfb x11-utils procps ffmpeg xterm liblcms2-dev
 
       - uses: actions/checkout@v4
 
@@ -155,7 +155,7 @@ jobs:
           cpu: 2
           mem: 4096
           prepare: |
-            pkg_add -I git tree xdpyinfo
+            pkg_add -I git tree xdpyinfo ffmpeg xterm lcms2
           run: |
             set -e
             ./Library/Scripts/bootstrap.sh

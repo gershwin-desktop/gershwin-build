@@ -89,7 +89,21 @@ static void DDSMenuNodeFree(DDSMenuNode *n)
   NSPipe *errPipe = [NSPipe pipe];
   [task setStandardOutput: outPipe];
   [task setStandardError: errPipe];
-  [task launch];
+  /* A missing binary (e.g. ffmpeg for screenshots) makes launch: raise
+   * NSInvalidArgumentException; turn it into a clean error instead of an
+   * uncaught exception that kills the whole test run. */
+  @try
+    {
+      [task launch];
+    }
+  @catch (NSException *e)
+    {
+      if (err) *err = [NSString stringWithFormat: @"cannot run %@: %@",
+        path, [e reason]];
+      [task release];
+      [pool release];
+      return nil;
+    }
 
   NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow: kRunToolTimeout];
   while ([task isRunning] && [[NSDate date] compare: deadline] == NSOrderedAscending)

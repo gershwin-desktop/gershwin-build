@@ -192,7 +192,12 @@ if [ "$UITEST_SESSION" = "isolated" ]; then
   if ! id "$UITEST_ISOLATED_USER" >/dev/null 2>&1; then
     echo "Creating test user '$UITEST_ISOLATED_USER'"
     # /bin/sh is guaranteed on every platform; bash is not (BSD builds).
-    useradd -m -s /bin/sh "$UITEST_ISOLATED_USER"
+    # FreeBSD/NextBSD ship pw(8) instead of useradd(8).
+    if [ "$(uname -s)" = "FreeBSD" ] || [ "$(uname -s)" = "NextBSD" ]; then
+      pw useradd "$UITEST_ISOLATED_USER" -m -s /bin/sh
+    else
+      useradd -m -s /bin/sh "$UITEST_ISOLATED_USER"
+    fi
   fi
 
   # A fresh virtual display, open to local connections.

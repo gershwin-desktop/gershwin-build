@@ -234,14 +234,15 @@ static void WriteAll(int fd, const char *bytes)
                * serviced while a modal is up. */
                DriveUIConnection *conn =
                  [[[DriveUIConnection alloc] initWithFD: cfd args: args] autorelease];
-               [self performSelectorOnMainThread: @selector(serviceConnection:)
-                                      withObject: conn
-                                   waitUntilDone: NO
-                                           modes: [NSArray arrayWithObjects:
-                                                    NSDefaultRunLoopMode,
-                                                    NSModalPanelRunLoopMode,
-                                                    NSEventTrackingRunLoopMode,
-                                                    nil]];
+                [self performSelectorOnMainThread: @selector(serviceConnection:)
+                                       withObject: conn
+                                    waitUntilDone: NO
+                                            modes: [NSArray arrayWithObjects:
+                                                     NSDefaultRunLoopMode,
+                                                     NSModalPanelRunLoopMode,
+                                                     NSEventTrackingRunLoopMode,
+                                                     NSConnectionReplyMode,
+                                                     nil]];
                [cpool release];
                continue;  /* main thread owns cfd from here on */
             }

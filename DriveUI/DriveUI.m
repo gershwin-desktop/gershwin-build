@@ -159,7 +159,15 @@ static void WriteAll(int fd, const char *bytes)
   size_t off = 0;
   while (off < len)
     {
+      /* send() with MSG_NOSIGNAL instead of write(): writing to a client that
+       * timed out and closed its socket raises SIGPIPE, and if the ignore
+       * disposition has been reset by some library the app dies mid-reply
+       * (the Workspace crash under repeated window_placement runs). */
+#ifdef MSG_NOSIGNAL
+      ssize_t w = send(fd, bytes + off, len - off, MSG_NOSIGNAL);
+#else
       ssize_t w = write(fd, bytes + off, len - off);
+#endif
       if (w <= 0) break;
       off += (size_t)w;
     }
@@ -170,6 +178,12 @@ static void WriteAll(int fd, const char *bytes)
 - (void)serverLoop:(id)unused
 {
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+
+  /* A library can reset SIGPIPE to SIG_DFL after the bundle's init ran; the
+   * replies below go to clients that may have timed out and closed, so keep
+   * the disposition ignored on this thread too (MSG_NOSIGNAL above is the
+   * primary guard, this is belt and braces). */
+  signal(SIGPIPE, SIG_IGN);
 
   pid_t pid = [[NSProcessInfo processInfo] processIdentifier];
   NSString *sockPath = [NSString stringWithFormat: @"/tmp/driveui.%d.sock", pid];

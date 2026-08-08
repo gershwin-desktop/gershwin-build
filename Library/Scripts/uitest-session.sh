@@ -76,6 +76,15 @@ if ! xdpyinfo -display "$UITEST_ISOLATED_DISPLAY" >/dev/null 2>&1; then
 fi
 
 echo "Starting isolated desktop for $UITEST_ISOLATED_USER on $UITEST_ISOLATED_DISPLAY"
+
+# The desktop apps expose a DriveUI socket only when the DriveUI bundle is
+# loaded at startup (the GSAppKitUserBundles user default).  Without it the
+# tests cannot drive the desktop at all ('Workspace not running').
+run_as_user "$UITEST_ISOLATED_USER" sh -c '
+  defaults write NSGlobalDomain GSAppKitUserBundles \
+    "(\"/System/Library/Bundles/DriveUI.bundle\")" >/dev/null 2>&1
+'
+
 run_as_user "$UITEST_ISOLATED_USER" sh -c '
   export DISPLAY="$1" HOME="/home/uitest"
   export GNUSTEP_SYSTEM_ROOT=/System GNUSTEP_LOCAL_ROOT=/Local GNUSTEP_NETWORK_ROOT=/Network

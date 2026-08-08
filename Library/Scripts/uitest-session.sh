@@ -48,6 +48,15 @@ if ! id "$UITEST_ISOLATED_USER" >/dev/null 2>&1; then
   exit 1
 fi
 
+# A killed session leaves a gdnc (DO name server) and GNUstepSecure temp state
+# behind, and a fresh gdnc cannot lock the port names - the desktop components
+# then fail with 'Failed to lock names for NSMessagePortNameServer'.  SIGKILL
+# the test user and drop the stale name-server state before bringing the
+# desktop up.
+pkill -9 -u "$UITEST_ISOLATED_USER" 2>/dev/null || true
+rm -rf /tmp/GNUstepSecure* 2>/dev/null || true
+sleep 1
+
 if ! xdpyinfo -display "$UITEST_ISOLATED_DISPLAY" >/dev/null 2>&1; then
   echo "Starting Xvfb on $UITEST_ISOLATED_DISPLAY"
   start_bg Xvfb "$UITEST_ISOLATED_DISPLAY" -screen 0 1920x1080x24 -nolisten tcp -ac

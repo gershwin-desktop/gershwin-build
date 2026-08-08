@@ -511,8 +511,23 @@ static NSString *CommandName(UITestCommandType t)
  * position every time). */
 - (BOOL)assertFrameConstantForWindow:(NSString *)title error:(NSString **)err
 {
-  NSString *frame = [engine_ frameOfWindowTitle: title error: err];
-  if (!frame) return NO;
+  /* A freshly opened viewer animates in (birth animation), so its frame can
+   * be mid-flight - or the window reported not-yet-visible - for a moment
+   * after `wait until window` succeeds.  Poll until the window settles so
+   * the frame-constant check does not flake on the animation. */
+  NSString *frame = nil;
+  for (int i = 0; i < 20 && frame == nil; i++)
+    {
+      frame = [engine_ frameOfWindowTitle: title error: nil];
+      if (frame == nil)
+        {
+          usleep (150000);
+        }
+    }
+  if (frame == nil)
+    {
+      return [engine_ frameOfWindowTitle: title error: err] != nil;
+    }
   NSString *ref = [frameRefs_ objectForKey: title];
   if (!ref)
     {

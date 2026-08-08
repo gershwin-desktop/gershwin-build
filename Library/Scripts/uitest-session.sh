@@ -1,13 +1,18 @@
 #!/bin/bash
 # Start the isolated UI-test desktop by hand, for running individual .uitest
-# scripts without the full suite (run-uitests.sh).  Brings up Xvfb, a dbus
-# session and Menu/WindowManager/Workspace for the test user on the virtual
-# display, then sleeps so the desktop stays up while you drive it.
+# scripts without the full suite (run-uitests.sh).  Brings up a virtual
+# display, a dbus session and Menu/WindowManager/Workspace for the test user,
+# then sleeps so the desktop stays up while you drive it.
 #
-# Requires the test user to exist (run-uitests.sh creates it) and Xvfb.
+# Two display modes:
+#   headless (default)  Xvfb - no window, invisible to the user.
+#   nested              Xephyr on your current display - the tests run in a
+#                       window you can watch on screen.
+#
+# Requires the test user to exist (run-uitests.sh creates it).
 #
 # Usage (as root or with passwordless sudo):
-#   sh Library/Scripts/uitest-session.sh
+#   sh Library/Scripts/uitest-session.sh [--nested]
 #   DISPLAY=:99 ... run_uitest --drive-tool drive_ui path/to/test.uitest
 set -u
 
@@ -18,6 +23,11 @@ ulimit -c unlimited 2>/dev/null || true
 
 UITEST_ISOLATED_USER="${UITEST_ISOLATED_USER:-uitest}"
 UITEST_ISOLATED_DISPLAY="${UITEST_ISOLATED_DISPLAY:-:99}"
+UITEST_SESSION_MODE="${UITEST_SESSION_MODE:-headless}"
+
+if [ "${1:-}" = "--nested" ]; then
+  UITEST_SESSION_MODE=nested
+fi
 
 start_bg()
 {
@@ -63,8 +73,19 @@ rm -rf /tmp/GNUstepSecure* 2>/dev/null || true
 sleep 1
 
 if ! xdpyinfo -display "$UITEST_ISOLATED_DISPLAY" >/dev/null 2>&1; then
-  echo "Starting Xvfb on $UITEST_ISOLATED_DISPLAY"
-  start_bg Xvfb "$UITEST_ISOLATED_DISPLAY" -screen 0 1920x1080x24 -nolisten tcp -ac
+  if [ "$UITEST_SESSION_MODE" = "nested" ]; then
+    # Xephyr shows the virtual display in a window on the CURRENT display, so
+    # you can watch the tests run.
+    if ! command -v Xephyr >/dev/null 2>&1; then
+      echo "error: Xephyr not installed (needed for --nested)" >&2
+      exit 1
+    fi
+    echo "Starting Xephyr on $UITEST_ISOLATED_DISPLAY (visible on $DISPLAY)"
+    start_bg Xephyr "$UITEST_ISOLATED_DISPLAY" -screen 1920x1080 -ac -nolisten tcp -noreset
+  else
+    echo "Starting Xvfb on $UITEST_ISOLATED_DISPLAY"
+    start_bg Xvfb "$UITEST_ISOLATED_DISPLAY" -screen 0 1920x1080x24 -nolisten tcp -ac
+  fi
   i=0
   while [ "$i" -lt 30 ]; do
     xdpyinfo -display "$UITEST_ISOLATED_DISPLAY" >/dev/null 2>&1 && break
@@ -72,7 +93,7 @@ if ! xdpyinfo -display "$UITEST_ISOLATED_DISPLAY" >/dev/null 2>&1; then
     i=$((i + 1))
   done
   xdpyinfo -display "$UITEST_ISOLATED_DISPLAY" >/dev/null 2>&1 || {
-    echo "Xvfb did not come up on $UITEST_ISOLATED_DISPLAY" >&2; exit 1; }
+    echo "X server did not come up on $UITEST_ISOLATED_DISPLAY" >&2; exit 1; }
 fi
 
 echo "Starting isolated desktop for $UITEST_ISOLATED_USER on $UITEST_ISOLATED_DISPLAY"

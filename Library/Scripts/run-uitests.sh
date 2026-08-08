@@ -151,21 +151,27 @@ start_desktop_component()
 # tests spawn - the harness, run_uitest, apps it launches, and their children
 # such as the Build app's `make` - sees the GNUstep build env (GNUSTEP_MAKEFILES
 # and friends).  Without it the Build test's `make` could not find common.make.
+#
+# The display and home are passed as positional arguments, NOT via the
+# environment: sudo/su reset the environment, so a $UITEST_ISOLATED_DISPLAY
+# reference inside the inner shell would expand empty and the Workspace would
+# fail with 'Unable to connect to X Server ""'.
 session_run()
 {
   if [ "$UITEST_SESSION" = "isolated" ]; then
     run_as_user "$UITEST_ISOLATED_USER" sh -c '
+      _disp="$1"; _home="$2"; shift 2
       . /System/Library/Makefiles/GNUstep.sh
-      exec env DISPLAY="$UITEST_ISOLATED_DISPLAY" \
-        HOME="/home/uitest" \
+      exec env DISPLAY="$_disp" \
+        HOME="$_home" \
         GNUSTEP_SYSTEM_ROOT=/System GNUSTEP_LOCAL_ROOT=/Local \
         GNUSTEP_NETWORK_ROOT=/Network \
-        GNUSTEP_USER_ROOT="/home/uitest/.GNUstep" \
+        GNUSTEP_USER_ROOT="$_home/.GNUstep" \
         FONTCONFIG_FILE=/System/Library/Preferences/fonts.conf \
         FONTCONFIG_PATH=/System/Library/Preferences \
         PATH=/System/Library/Tools:/usr/bin:/bin \
         "$@"
-    ' _ "$@"
+    ' _ "$UITEST_ISOLATED_DISPLAY" "/home/$UITEST_ISOLATED_USER" "$@"
   else
     "$@"
   fi

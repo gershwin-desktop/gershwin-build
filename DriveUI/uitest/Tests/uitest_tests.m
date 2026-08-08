@@ -814,6 +814,7 @@ main()
     }
   PASS([groups count] > 0, "found at least one UITest script");
 
+  int failures = 0;
   for (NSString *group in
     [[groups allKeys] sortedArrayUsingSelector:@selector(compare:)])
     {
@@ -829,11 +830,18 @@ main()
       START_SET(gname)
       for (NSString *abs in [groups objectForKey:group])
         {
-          PASS(runScript(abs), "%s", [displayPath(abs) UTF8String]);
+          BOOL ok = runScript(abs);
+          PASS(ok, "%s", [displayPath(abs) UTF8String]);
+          if (!ok)
+            {
+              failures++;
+            }
         }
       END_SET(gname)
     }
 
   RELEASE(pool);
-  return 0;
+  /* A failed uitest must fail the process: 'make test' in gershwin-developer
+   * (and any CI wrapper) gates on the exit status. */
+  return failures > 0 ? 1 : 0;
 }

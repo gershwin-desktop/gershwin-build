@@ -11,6 +11,11 @@
 #   DISPLAY=:99 ... run_uitest --drive-tool drive_ui path/to/test.uitest
 set -u
 
+# Let the isolated desktop dump core (the test user's own hard limit is 0) so
+# a crash produces a core we can backtrace.
+ulimit -Hc unlimited 2>/dev/null || true
+ulimit -c unlimited 2>/dev/null || true
+
 UITEST_ISOLATED_USER="${UITEST_ISOLATED_USER:-uitest}"
 UITEST_ISOLATED_DISPLAY="${UITEST_ISOLATED_DISPLAY:-:99}"
 

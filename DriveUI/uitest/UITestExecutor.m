@@ -618,7 +618,7 @@ static NSString *CommandName(UITestCommandType t)
           if (prev != nil && [self frameString: prev matches: f])
             {
               stable++;
-              if (stable >= 2)
+              if (stable >= 6)
                 {
                   /* The frame has been stable across a sustained period - the
                    * birth animation / decoration correction is over.  Wait a

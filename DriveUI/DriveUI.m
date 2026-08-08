@@ -683,6 +683,8 @@ static void WriteAll(int fd, const char *bytes)
                   NSBundle *b = [NSBundle mainBundle];
                   NSString *loc = [b localizedStringForKey: needle
                     value: needle table: nil];
+                  NSLog(@"[close_window] needle=%@ loc=%@ visible wins=%lu",
+                    needle, loc, (unsigned long)[[NSApp windows] count]);
                   NSArray *wins = [[NSApp windows] copy];
                   for (NSWindow *win in wins)
                     {
@@ -722,9 +724,19 @@ static void WriteAll(int fd, const char *bytes)
                                 runMode: NSDefaultRunLoopMode
                              beforeDate: [NSDate dateWithTimeIntervalSinceNow: 0.2]];
                             }
+                          /* NOTE: no orderOut fallback - hiding a window
+                           * without closing it leaves it registered in
+                           * [NSApp windows] forever; a few runs accumulate
+                           * dozens of hidden viewers and the app eventually
+                           * crashes touching them.  If the close above does
+                           * not finish, make it key and retry once. */
                           if ([win isVisible])
                             {
-                              [win orderOut: nil];
+                              [win makeKeyAndOrderFront: nil];
+                              [win performClose: self];
+                              [[NSRunLoop currentRunLoop]
+                                runMode: NSDefaultRunLoopMode
+                             beforeDate: [NSDate dateWithTimeIntervalSinceNow: 0.5]];
                             }
                         }
                       @catch (NSException *e) { }

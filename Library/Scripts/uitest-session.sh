@@ -23,10 +23,17 @@ ulimit -c unlimited 2>/dev/null || true
 
 UITEST_ISOLATED_USER="${UITEST_ISOLATED_USER:-uitest}"
 UITEST_ISOLATED_DISPLAY="${UITEST_ISOLATED_DISPLAY:-:99}"
-UITEST_SESSION_MODE="${UITEST_SESSION_MODE:-headless}"
+UITEST_SESSION_MODE="${UITEST_SESSION_MODE:-}"
+if [ -z "$UITEST_SESSION_MODE" ]; then
+  if [ -n "${DISPLAY:-}" ] && command -v Xephyr >/dev/null 2>&1; then
+    UITEST_SESSION_MODE=nested
+  else
+    UITEST_SESSION_MODE=headless
+  fi
+fi
 
-if [ "${1:-}" = "--nested" ]; then
-  UITEST_SESSION_MODE=nested
+if [ "${1:-}" = "--headless" ]; then
+  UITEST_SESSION_MODE=headless
 fi
 
 start_bg()

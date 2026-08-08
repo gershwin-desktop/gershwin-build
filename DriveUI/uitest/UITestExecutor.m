@@ -194,7 +194,9 @@ static NSString *CommandName(UITestCommandType t)
       && cmd.assertKind != DDSAssertXWindowCount)
     {
       NSString *durTok = [[cmd words] objectAtIndex: 0];
-      cTimeout = [durTok doubleValue];
+      /* durationForString: honours the "ms"/"s"/"m" suffix; a raw doubleValue
+       * would turn "timeout 200ms" into 200 SECONDS. */
+      cTimeout = [UITestExecutor durationForString: durTok];
     }
   (void)cTimeout;
 

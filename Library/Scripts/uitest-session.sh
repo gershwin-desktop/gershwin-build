@@ -81,7 +81,7 @@ if ! xdpyinfo -display "$UITEST_ISOLATED_DISPLAY" >/dev/null 2>&1; then
       exit 1
     fi
     echo "Starting Xephyr on $UITEST_ISOLATED_DISPLAY (visible on $DISPLAY)"
-    start_bg Xephyr "$UITEST_ISOLATED_DISPLAY" -screen 1920x1080 -ac -nolisten tcp -noreset
+    start_bg Xephyr "$UITEST_ISOLATED_DISPLAY" -screen 800x600 -ac -nolisten tcp -noreset
   else
     echo "Starting Xvfb on $UITEST_ISOLATED_DISPLAY"
     start_bg Xvfb "$UITEST_ISOLATED_DISPLAY" -screen 0 1920x1080x24 -nolisten tcp -ac

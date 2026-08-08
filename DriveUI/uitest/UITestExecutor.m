@@ -206,10 +206,10 @@ static NSString *CommandName(UITestCommandType t)
     case DDSCmdActivate:
       /* A desktop app can be momentarily unresponsive (its DriveUI server
        * posts work to the main thread; a busy Workspace stalls the reply for
-       * a few seconds).  Retry the resolve+activate a couple of times so a
+       * a few seconds).  Retry the resolve+activate a few times so a
        * transient stall does not fail a test that the app recovers from. */
       rc = DDSAccessibilityError;
-      for (int attempt = 0; attempt < 3; attempt++)
+      for (int attempt = 0; attempt < 5; attempt++)
         {
           if ([engine_ resolveApplication: cmd.string error: &err] &&
               [engine_ activate: &err])
@@ -217,7 +217,7 @@ static NSString *CommandName(UITestCommandType t)
               rc = 0;
               break;
             }
-          if (attempt < 2) usleep(1000000);
+          if (attempt < 4) usleep(2000000);
         }
       break;
     case DDSCmdActivateXWindow:

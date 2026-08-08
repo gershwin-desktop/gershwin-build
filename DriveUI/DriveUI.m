@@ -703,7 +703,10 @@ static void WriteAll(int fd, const char *bytes)
                           [win performClose: self];
                           closed = YES;
                           /* GNUstep can defer the close; if it is still up a
-                           * moment later, close it directly. */
+                           * moment later, close it directly, then hide it as
+                           * a last resort (the viewer's close can otherwise
+                           * get stuck and the 'not exists' assertion times
+                           * out). */
                           NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow: 0.5];
                           while ([win isVisible]
                                  && [[NSDate date] compare: deadline] == NSOrderedAscending)
@@ -715,6 +718,13 @@ static void WriteAll(int fd, const char *bytes)
                           if ([win isVisible])
                             {
                               [win close];
+                              [[NSRunLoop currentRunLoop]
+                                runMode: NSDefaultRunLoopMode
+                             beforeDate: [NSDate dateWithTimeIntervalSinceNow: 0.2]];
+                            }
+                          if ([win isVisible])
+                            {
+                              [win orderOut: nil];
                             }
                         }
                       @catch (NSException *e) { }

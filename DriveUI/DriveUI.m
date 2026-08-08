@@ -667,41 +667,54 @@ static void WriteAll(int fd, const char *bytes)
             }
           else if ([cmd isEqualToString: @"close_window"])
             {
-              /* Close a window by its (localized) title.  Performed in-process
-               * via performClose:, so it works regardless of which window is
-               * key - the Close menu item is disabled when the viewer window
-               * was not made key, which a synthetic dialog flow cannot
-               * guarantee.  Matching is a case-insensitive substring match
-               * against the title, or against its English/localized twin. */
+              /* Close every window by its (localized) title.  Performed
+               * in-process via performClose:, so it works regardless of which
+               * window is key - the Close menu item is disabled when the
+               * viewer window was not made key, which a synthetic dialog flow
+               * cannot guarantee.  GNUstep defers performClose: for a non-key
+               * window, so make it key first and fall back to close: if it
+               * did not close; also close ALL matches, because a viewer left
+               * over from a previous aborted run otherwise blocks the
+               * 'not exists' assertion. */
               NSString *needle = ([parts count] > 1) ? [parts objectAtIndex: 1] : nil;
               BOOL closed = NO;
               if ([needle length] > 0)
                 {
+                  NSBundle *b = [NSBundle mainBundle];
+                  NSString *loc = [b localizedStringForKey: needle
+                    value: needle table: nil];
                   NSArray *wins = [[NSApp windows] copy];
                   for (NSWindow *win in wins)
                     {
                       @try
                         {
                           NSString *t = [win title] ?: @"";
-                          if (![win isVisible]) continue;
+                          BOOL matches = NO;
                           if ([t rangeOfString: needle
                             options: NSCaseInsensitiveSearch].location != NSNotFound)
-                            {
-                              [win performClose: self];
-                              closed = YES;
-                              break;
-                            }
-                          /* Accept the localized spelling of the needle. */
-                          NSBundle *b = [NSBundle mainBundle];
-                          NSString *loc = [b localizedStringForKey: needle
-                            value: needle table: nil];
-                          if (![loc isEqualToString: needle] &&
+                            matches = YES;
+                          else if (![loc isEqualToString: needle] &&
                               [t rangeOfString: loc
                                 options: NSCaseInsensitiveSearch].location != NSNotFound)
+                            matches = YES;
+                          if (!matches) continue;
+                          if (![win isVisible]) continue;
+                          [win makeKeyAndOrderFront: nil];
+                          [win performClose: self];
+                          closed = YES;
+                          /* GNUstep can defer the close; if it is still up a
+                           * moment later, close it directly. */
+                          NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow: 0.5];
+                          while ([win isVisible]
+                                 && [[NSDate date] compare: deadline] == NSOrderedAscending)
                             {
-                              [win performClose: self];
-                              closed = YES;
-                              break;
+                              [[NSRunLoop currentRunLoop]
+                                runMode: NSDefaultRunLoopMode
+                             beforeDate: [NSDate dateWithTimeIntervalSinceNow: 0.05]];
+                            }
+                          if ([win isVisible])
+                            {
+                              [win close];
                             }
                         }
                       @catch (NSException *e) { }

@@ -1058,7 +1058,12 @@ static void SetErr(NSString **err, NSString *m)
 /* Launch a command/app through the target app's Run... dialog: open the
  * dialog (its "Run..." menu item), click the CompletionField so it really has
  * the X focus, type the command, and press Return.  Used to start helper apps
- * for tests the same way a user would. */
+ * for tests the same way a user would.
+ *
+ * A loaded Workspace can take a moment to open the dialog and can drop
+ * keystrokes, so the whole click+type+submit is retried.  The field text is
+ * NOT read back to verify (a CompletionField is an NSTextView and 'get'
+ * returns empty for it), so each attempt starts from a freshly opened dialog. */
 - (BOOL)runCommandInRunDialog:(NSString *)command error:(NSString **)err
 {
   if (command == nil || [command length] == 0)
@@ -1066,21 +1071,31 @@ static void SetErr(NSString **err, NSString *m)
   if (pid_ == 0)
     { SetErr(err, @"run needs a target application (the one with the Run menu)"); return NO; }
 
-  if (![self selectMenuPath: @"Tools/Run..." error: err])
-    return NO;
-  usleep (250000);   /* let the dialog open and take focus */
+  for (int attempt = 0; attempt < 3; attempt++)
+    {
+      if (![self selectMenuPath: @"Tools/Run..." error: err])
+        return NO;
+      usleep (400000);   /* let the dialog open and take focus */
 
-  NSString *fieldID = [self clickFrontmostCompletionField: err];
-  if (fieldID == nil)
-    { SetErr(err, @"run: no CompletionField found (Run dialog not open?)"); return NO; }
+      NSString *fieldID = [self clickFrontmostCompletionField: err];
+      if (fieldID == nil)
+        {
+          /* Dialog not ready; close it and retry. */
+          [self runCollect: [NSArray arrayWithObjects:
+            [NSString stringWithFormat: @"--pid=%d", pid_], @"press", @"Escape", nil]
+            error: nil];
+          continue;
+        }
 
-  NSArray *typeArg = [NSArray arrayWithObjects:
-    [NSString stringWithFormat: @"--pid=%d", pid_], @"sendkeys", command, nil];
-  [self runCollect: typeArg error: nil];
-
-  NSArray *pressArg = [NSArray arrayWithObjects:
-    [NSString stringWithFormat: @"--pid=%d", pid_], @"press", nil];
-  return [self runCollect: pressArg error: err] != nil;
+      [self runCollect: [NSArray arrayWithObjects:
+        [NSString stringWithFormat: @"--pid=%d", pid_], @"sendkeys", command, nil]
+        error: nil];
+      NSArray *pressArg = [NSArray arrayWithObjects:
+        [NSString stringWithFormat: @"--pid=%d", pid_], @"press", nil];
+      if ([self runCollect: pressArg error: err] != nil)
+        return YES;
+    }
+  return NO;
 }
 
 /* Click the CompletionField of the dialog that is currently up (the Run /

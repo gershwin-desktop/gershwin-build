@@ -105,6 +105,7 @@
 @interface DriveUI : NSObject
 {
   NSArray *_snapshot;
+  NSString *_processName;
 }
 - (void)serverLoop:(id)unused;
 - (void)serviceConnection:(DriveUIConnection *)conn;
@@ -131,6 +132,12 @@
       /* Writing to a socket whose client has gone away must not raise
        * SIGPIPE and kill the app. */
       signal(SIGPIPE, SIG_IGN);
+      /* Cache the app name here, on the main thread at load time: the server
+       * thread answers the "app" query from this cache, so it never has to
+       * trigger a class load on the background thread (which can race the
+       * main thread and crash in libobjc's load_messages_insert). */
+      NSString *pn = [[NSProcessInfo processInfo] processName];
+      _processName = ([pn length] > 0) ? [pn copy] : @"unknown";
       [NSThread detachNewThreadSelector: @selector(serverLoop:)
                                toTarget: self
                              withObject: nil];
@@ -226,11 +233,15 @@ static void WriteAll(int fd, const char *bytes)
                * whenever the main thread is busy (e.g. the Workspace doing a
                * long synchronous operation), which made run_uitest fail with
                * 'Workspace not running (DriveUI bundle not loaded?)' even
-               * though the app was fine. */
+               * though the app was fine.
+               *
+               * Use the name cached at bundle init (see init) - calling
+               * +[NSProcessInfo processInfo] from this background thread could
+               * trigger a class load that races the main thread and crashes
+               * the app (GPF in libobjc's load_messages_insert). */
               if ([args count] > 0 && [[args objectAtIndex: 0] isEqualToString: @"app"])
                 {
-                  NSString *aname = [[NSProcessInfo processInfo] processName];
-                  if ([aname length] == 0) aname = @"unknown";
+                  NSString *aname = _processName ?: @"unknown";
                   NSString *reply = [aname stringByAppendingString: @"\n"];
                   WriteAll(cfd, [reply UTF8String]);
                   close(cfd);

@@ -23,6 +23,11 @@
 # Exit status is the harness's.
 set -u
 
+# Let the isolated test user dump core (its own hard limit is 0) so a crash in
+# a desktop component produces a core we can backtrace.
+ulimit -Hc unlimited 2>/dev/null || true
+ulimit -c unlimited 2>/dev/null || true
+
 WORKDIR="$(cd "$(dirname "$0")/../.." && pwd)"
 REPOS_DIR="${UITEST_REPOS_DIR:-$WORKDIR/Library/Sources}"
 XVFB_PID=""
@@ -160,6 +165,7 @@ session_run()
 {
   if [ "$UITEST_SESSION" = "isolated" ]; then
     run_as_user "$UITEST_ISOLATED_USER" sh -c '
+      ulimit -c unlimited 2>/dev/null || true
       _disp="$1"; _home="$2"; shift 2
       . /System/Library/Makefiles/GNUstep.sh
       exec env DISPLAY="$_disp" \

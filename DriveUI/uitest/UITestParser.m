@@ -230,6 +230,16 @@ case DDSRoleLabel:                        return @"NSTextField";
       return nil;
     }
   UITestProgram *prog = [[[UITestProgram alloc] init] autorelease];
+  /* Built-in variable: the current home folder's name, so scripts that open
+   * the home folder can reference its window without hardcoding the username
+   * (e.g. 'wait until window "${home}"').  The window title of the home
+   * folder is its directory name, which differs per user (admin, root, ...). */
+  NSString *home = [[NSHomeDirectory() lastPathComponent]
+    stringByReplacingPercentEscapesUsingEncoding: NSUTF8StringEncoding];
+  if ([home length] > 0)
+    {
+      [[prog variables] setObject: home forKey: @"home"];
+    }
   if (![self parseString: text sourceName: path program: prog error: err])
     return nil;
   return prog;

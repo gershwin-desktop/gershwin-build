@@ -256,6 +256,15 @@ rc=$?
 
 restore_appkit_bundles
 
+# Leave a clean slate: the isolated desktop (Menu, WindowManager, Workspace,
+# plus any app the tests launched) stays alive because SIGTERM does not stop
+# it (the Workspace ignores it), so without this the next isolated run would
+# reuse stale processes and sockets.  SIGKILL the whole test user instead.
+if [ "$UITEST_SESSION" = "isolated" ]; then
+  sudo pkill -9 -u "$UITEST_ISOLATED_USER" 2>/dev/null || true
+  sleep 1
+fi
+
 if [ -n "$XVFB_PID" ]; then
   kill "$XVFB_PID" 2>/dev/null
 fi

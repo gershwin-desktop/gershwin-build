@@ -205,9 +205,12 @@ static void DDSMenuNodeFree(DDSMenuNode *n)
       int maybePid = [pidStr intValue];
       if (maybePid <= 0) continue;
       if (kill(maybePid, 0) != 0) continue;  /* stale socket, owner gone */
+      /* The name query is fast for a healthy app (~25 ms); use the short
+       * timeout so a wedged leftover app from an earlier test costs at most
+       * 2 s instead of stalling every app resolution for 20 s. */
       NSString *out = [self runCollect: [NSArray arrayWithObjects:
         [NSString stringWithFormat: @"--pid=%d", maybePid], @"app", nil]
-        timeout: kToolTimeoutApp error: nil];
+        timeout: kToolTimeoutFast error: nil];
       if (!out) continue;
       NSString *found = [out stringByTrimmingCharactersInSet:
         [NSCharacterSet newlineCharacterSet]];

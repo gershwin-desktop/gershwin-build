@@ -220,6 +220,24 @@ static void WriteAll(int fd, const char *bytes)
               NSString *cmdline = [lines count] > 0 ? [lines objectAtIndex: 0] : @"";
               NSArray *args = [cmdline componentsSeparatedByString: @"\t"];
 
+              /* Fast path: the "app" identity query is a pure function of the
+               * process and never touches AppKit, so answer it HERE on the
+               * server thread.  Posting it to the main thread would stall it
+               * whenever the main thread is busy (e.g. the Workspace doing a
+               * long synchronous operation), which made run_uitest fail with
+               * 'Workspace not running (DriveUI bundle not loaded?)' even
+               * though the app was fine. */
+              if ([args count] > 0 && [[args objectAtIndex: 0] isEqualToString: @"app"])
+                {
+                  NSString *aname = [[NSProcessInfo processInfo] processName];
+                  if ([aname length] == 0) aname = @"unknown";
+                  NSString *reply = [aname stringByAppendingString: @"\n"];
+                  WriteAll(cfd, [reply UTF8String]);
+                  close(cfd);
+                  [cpool release];
+                  continue;
+                }
+
               /* Package the connection and ask the main thread to service it.
                * waitUntilDone:NO means the server thread never blocks: the
                * main thread owns the fd from here on, writes the reply, and

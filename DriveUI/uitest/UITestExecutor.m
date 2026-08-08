@@ -189,7 +189,7 @@ static NSString *CommandName(UITestCommandType t)
    * parser stores only the duration token after the "timeout" keyword).  The
    * count form (assertKind == DDSAssertXWindowCount) puts its operator and
    * operand in words instead, so it keeps the default timeout. */
-  double cTimeout = 30.0;
+  double cTimeout = 2.0;
   if (cmd.type == DDSCmdWaitUntil && [[cmd words] count] > 0
       && cmd.assertKind != DDSAssertXWindowCount)
     {

@@ -69,7 +69,12 @@
 #import <unistd.h>
 #import "X11Support.h"
 
-#define DRIVE_UI_TOOL_TIMEOUT_MS 1000
+/* Socket read timeout.  The Workspace (and other busy desktop apps) can take
+ * longer than a second to answer a query, so 1s made app resolution flaky and
+ * tests failed spuriously; 20s still bounds a hung socket.  run_uitest wraps
+ * each drive_ui call with its own timeout (2s for widget queries, 20s for app
+ * resolution), so the longer socket read only delays a truly dead app. */
+#define DRIVE_UI_TOOL_TIMEOUT_MS 20000
 
 static int ConnectToPid(int pid)
 {

@@ -19,6 +19,13 @@
 #import <signal.h>
 #import <unistd.h>
 
+/* Per-drive_ui-call timeouts.  Fast queries (find/click/read on an already
+ * resolved app) are short so a hung app fails a script in seconds; app
+ * resolution (activate/launch) queries every DriveUI socket on the system, so
+ * a busy desktop (the Workspace especially) needs a much larger budget. */
+static const double kToolTimeoutFast = 2.0;
+static const double kToolTimeoutApp = 20.0;
+
 @implementation UITestQueryEngine
 
 /* Node in the menu-title trie built from the DriveUI `menu` reply.  `raw` is
@@ -64,6 +71,11 @@ static void DDSMenuNodeFree(DDSMenuNode *n)
   return [self runTool: driveTool_ argv: argv error: err];
 }
 
+- (NSString *)runCollect:(NSArray *)argv timeout:(double)timeout error:(NSString **)err
+{
+  return [self runTool: driveTool_ argv: argv timeout: timeout error: err];
+}
+
 /* Run an arbitrary executable, wait for it, and return its stdout (nil if the
  * exit status was non-zero).
  *
@@ -78,10 +90,18 @@ static void DDSMenuNodeFree(DDSMenuNode *n)
  * descriptor limit (EMFILE). */
 - (NSString *)runTool:(NSString *)path argv:(NSArray *)argv error:(NSString **)err
 {
+  return [self runTool: path argv: argv timeout: kToolTimeoutFast error: err];
+}
+
+/* Same as runTool:argv:error: but with an explicit timeout; app resolution
+ * (activate/launch) gets a much longer budget than a single widget query,
+ * because resolving a busy desktop app means querying every DriveUI socket. */
+- (NSString *)runTool:(NSString *)path argv:(NSArray *)argv timeout:(double)timeout
+  error:(NSString **)err
+{
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
   NSString *result = nil;
 
-  const double kRunToolTimeout = 30.0;
   NSTask *task = [[NSTask alloc] init];
   [task setLaunchPath: path];
   [task setArguments: argv];
@@ -105,7 +125,7 @@ static void DDSMenuNodeFree(DDSMenuNode *n)
       return nil;
     }
 
-  NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow: kRunToolTimeout];
+  NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow: timeout];
   while ([task isRunning] && [[NSDate date] compare: deadline] == NSOrderedAscending)
     {
       usleep(100000);
@@ -187,7 +207,7 @@ static void DDSMenuNodeFree(DDSMenuNode *n)
       if (kill(maybePid, 0) != 0) continue;  /* stale socket, owner gone */
       NSString *out = [self runCollect: [NSArray arrayWithObjects:
         [NSString stringWithFormat: @"--pid=%d", maybePid], @"app", nil]
-        error: nil];
+        timeout: kToolTimeoutApp error: nil];
       if (!out) continue;
       NSString *found = [out stringByTrimmingCharactersInSet:
         [NSCharacterSet newlineCharacterSet]];
@@ -398,7 +418,7 @@ static void SetErr(NSString **err, NSString *m)
 - (BOOL)activate:(NSString **)err
 {
   NSArray *argv = [self argvForSubcommand: @"get_full_tree"];
-  NSString *tree = [self runCollect: argv error: err];
+  NSString *tree = [self runCollect: argv timeout: kToolTimeoutApp error: err];
   if (!tree) return NO;
   NSString *target = nil;
   for (NSString *line in [tree componentsSeparatedByString: @"\n"])

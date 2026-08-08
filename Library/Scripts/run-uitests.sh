@@ -28,6 +28,46 @@ if command -v fc-cache >/dev/null 2>&1; then
   fc-cache -f /System/Library/Fonts >/dev/null 2>&1
 fi
 
+# The desktop apps expose a DriveUI socket only when the DriveUI bundle is
+# loaded into every app at startup (the GSAppKitUserBundles user default).  A
+# bare CI container lacks it, so every launched app reports "did not start
+# (DriveUI socket missing)".  Enable it for the run - preserving any prior
+# value - and restore that value at the end so the container's user defaults
+# are left as they were found.
+APPKIT_BUNDLES_PRIOR=""
+APPKIT_BUNDLES_HAD=0
+if command -v defaults >/dev/null 2>&1; then
+  if defaults read NSGlobalDomain GSAppKitUserBundles >/dev/null 2>&1; then
+    APPKIT_BUNDLES_HAD=1
+    _raw=$(defaults read NSGlobalDomain GSAppKitUserBundles)
+    _arg="("
+    for _p in $(printf '%s\n' "$_raw" | sed -n 's/^[[:space:]]*"\([^"]*\)",*[[:space:]]*$/\1/p')
+    do
+      _arg="$_arg\"$_p\","
+    done
+    APPKIT_BUNDLES_PRIOR="${_arg%,})"
+  fi
+  if printf '%s' "$APPKIT_BUNDLES_PRIOR" | grep -q 'DriveUI.bundle'; then
+    _new="$APPKIT_BUNDLES_PRIOR"
+  elif [ -n "$APPKIT_BUNDLES_PRIOR" ]; then
+    _new="${APPKIT_BUNDLES_PRIOR%)},\"/System/Library/Bundles/DriveUI.bundle\")"
+  else
+    _new='("/System/Library/Bundles/DriveUI.bundle")'
+  fi
+  defaults write NSGlobalDomain GSAppKitUserBundles "$_new" >/dev/null 2>&1
+fi
+
+restore_appkit_bundles()
+{
+  if command -v defaults >/dev/null 2>&1; then
+    if [ "$APPKIT_BUNDLES_HAD" = 1 ]; then
+      defaults write NSGlobalDomain GSAppKitUserBundles "$APPKIT_BUNDLES_PRIOR" >/dev/null 2>&1 || true
+    else
+      defaults delete NSGlobalDomain GSAppKitUserBundles >/dev/null 2>&1 || true
+    fi
+  fi
+}
+
 # Start a background process that must outlive this shell.  setsid detaches it
 # into its own session so a wrapper shell (GitHub Actions) cannot reap it; plain
 # '&' would leave it in the shell's process group.
@@ -57,6 +97,9 @@ fi
 
 # 2. Desktop components (the harness hard-requires Menu; Workspace and
 #    WindowManager must be up for the desktop tests to be meaningful).
+#    The GSAppKitUserBundles default and the fontconfig setup above are read at
+#    app startup, so any already-running instance lacks the DriveUI bundle and
+#    would not expose a socket; restart them so they pick both up.
 MENU=/System/Library/CoreServices/Applications/Menu.app/Menu
 WM=/System/Library/CoreServices/Applications/WindowManager.app/WindowManager
 WS=/System/Applications/Workspace.app/Workspace
@@ -65,13 +108,16 @@ for name_bin in "Menu:$MENU" "WindowManager:$WM" "Workspace:$WS"
 do
   name="${name_bin%%:*}"
   bin="${name_bin#*:}"
-  if ! pgrep -x "$name" >/dev/null 2>&1; then
-    if [ -x "$bin" ]; then
-      echo "Starting $name"
-      start_bg "$bin"
-    else
-      echo "Warning: $name binary not found at $bin" >&2
-    fi
+  if pgrep -x "$name" >/dev/null 2>&1; then
+    echo "Restarting $name (to load the DriveUI bundle)"
+    pkill -x "$name" 2>/dev/null || true
+    sleep 1
+  fi
+  if [ -x "$bin" ]; then
+    echo "Starting $name"
+    start_bg "$bin"
+  else
+    echo "Warning: $name binary not found at $bin" >&2
   fi
 done
 
@@ -134,6 +180,8 @@ fi
 
 "$HARNESS"
 rc=$?
+
+restore_appkit_bundles
 
 if [ -n "$XVFB_PID" ]; then
   kill "$XVFB_PID" 2>/dev/null

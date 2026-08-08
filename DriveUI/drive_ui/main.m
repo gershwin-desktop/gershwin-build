@@ -1693,6 +1693,9 @@ int main(int argc, const char *argv[])
         {
           NSString *ch = [value substringWithRange: NSMakeRange(i, 1)];
           [X11Support simulateKeyStroke: ch];
+          /* A loaded app can drop X key events if they arrive faster than it
+           * processes them; pace the typing so the whole command lands. */
+          usleep (30000);
         }
     }
   else if ([command isEqualToString: @"clear"])

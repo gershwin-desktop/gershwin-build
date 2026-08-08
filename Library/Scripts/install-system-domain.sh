@@ -360,7 +360,9 @@ case "$TARGET" in
   test)
     ensure_gnustep_env
     build_driveui
-    sh "$WORKDIR/Library/Scripts/run-uitests.sh"
+    # CI containers have no X session, so run the suite on a fresh virtual
+    # display as a dedicated test user rather than the default "session" mode.
+    UITEST_SESSION=isolated sh "$WORKDIR/Library/Scripts/run-uitests.sh"
     rc=$?
     if [ "$rc" -ne 0 ]; then
       echo "UI tests failed (exit $rc)" >&2

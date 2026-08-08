@@ -568,11 +568,12 @@ static NSString *CommandName(UITestCommandType t)
   double ms = -[start timeIntervalSinceNow] * 1000.0;
   if ([log_ length]) [log_ appendString: @"\n"];
   if (rc == 0)
-    [log_ appendFormat: @"%.3f %@\n  SUCCESS  %.0f ms", ms / 1000.0,
-      [self formatCommand: cmd], ms];
+    [log_ appendFormat: @"%.3f %@ (line %lu)\n  SUCCESS  %.0f ms",
+      ms / 1000.0, [self formatCommand: cmd], (unsigned long)cmd.line, ms];
   else
-    [log_ appendFormat: @"%.3f %@\n  %@  %.0f ms", ms / 1000.0,
-      [self formatCommand: cmd], err ?: @"runtime error", ms];
+    [log_ appendFormat: @"%.3f %@ (line %lu)\n  %@  %.0f ms",
+      ms / 1000.0, [self formatCommand: cmd], (unsigned long)cmd.line,
+      err ?: @"runtime error", ms];
   if (reason) *reason = err;
   return rc;
 }
@@ -582,20 +583,63 @@ static NSString *CommandName(UITestCommandType t)
  * and passes, every later one must match it exactly.  Used to pin window
  * placement across repeated opens (e.g. a viewer window must open at the same
  * position every time). */
+/* Frame string comparison with a small tolerance: the window manager can
+ * round a restored frame by a pixel or two, so an exact string match would
+ * flake on placement that is in fact stable.  A mismatch beyond 2px is a
+ * real placement regression. */
+- (BOOL)frameString:(NSString *)a matches:(NSString *)b
+{
+  NSRect ra = NSRectFromString (a);
+  NSRect rb = NSRectFromString (b);
+  return (fabs (NSMinX (ra) - NSMinX (rb)) <= 2.0
+          && fabs (NSMinY (ra) - NSMinY (rb)) <= 2.0
+          && fabs (NSWidth (ra) - NSWidth (rb)) <= 2.0
+          && fabs (NSHeight (ra) - NSHeight (rb)) <= 2.0);
+}
+
 - (BOOL)assertFrameConstantForWindow:(NSString *)title error:(NSString **)err
 {
-  /* A freshly opened viewer animates in (birth animation), so its frame can
-   * be mid-flight - or the window reported not-yet-visible - for a moment
-   * after `wait until window` succeeds.  Poll until the window settles so
-   * the frame-constant check does not flake on the animation. */
+  /* A freshly opened viewer animates in (birth animation) and the Workspace
+   * re-applies the exact frame (with the title bar) asynchronously after the
+   * window maps, so the frame keeps changing for a moment after `wait until
+   * window` succeeds.  Poll until the frame has been STABLE across a
+   * sustained period (two consecutive reads 500ms apart within tolerance) so
+   * the animation is over before the frame-constant check records/compares -
+   * a read mid-animation and a read after it would otherwise look like a 22px
+   * placement change. */
   NSString *frame = nil;
-  for (int i = 0; i < 20 && frame == nil; i++)
+  NSString *prev = nil;
+  int stable = 0;
+  for (int i = 0; i < 30; i++)
     {
-      frame = [engine_ frameOfWindowTitle: title error: nil];
-      if (frame == nil)
+      NSString *f = [engine_ frameOfWindowTitle: title error: nil];
+      if (f != nil)
         {
-          usleep (150000);
+          if (prev != nil && [self frameString: prev matches: f])
+            {
+              stable++;
+              if (stable >= 2)
+                {
+                  /* The frame has been stable across a sustained period - the
+                   * birth animation / decoration correction is over.  Wait a
+                   * beat more so a trailing settle can never be caught
+                   * mid-flight, then record. */
+                  usleep (50000);
+                  frame = [engine_ frameOfWindowTitle: title error: nil] ?: f;
+                  break;
+                }
+            }
+          else
+            {
+              stable = 0;
+            }
+          prev = f;
         }
+      usleep (500000);
+    }
+  if (frame == nil)
+    {
+      frame = prev;
     }
   if (frame == nil)
     {
@@ -609,17 +653,7 @@ static NSString *CommandName(UITestCommandType t)
         [title UTF8String], [frame UTF8String]);
       return YES;
     }
-  /* Compare with a small tolerance: the window manager can round a restored
-   * frame by a pixel or two, so an exact string match would flake on
-   * placement that is in fact stable.  A mismatch beyond 2px is a real
-   * placement regression. */
-  NSRect a = NSRectFromString (ref);
-  NSRect b = NSRectFromString (frame);
-  BOOL same = (fabs (NSMinX (a) - NSMinX (b)) <= 2.0
-               && fabs (NSMinY (a) - NSMinY (b)) <= 2.0
-               && fabs (NSWidth (a) - NSWidth (b)) <= 2.0
-               && fabs (NSHeight (a) - NSHeight (b)) <= 2.0);
-  if (same)
+  if ([self frameString: ref matches: frame])
     {
       fprintf(stderr, "[uitest] frame of window '%s' stable: %s\n",
         [title UTF8String], [frame UTF8String]);

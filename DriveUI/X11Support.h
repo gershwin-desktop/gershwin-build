@@ -42,6 +42,9 @@
 // coordinates to X11's top-origin root coordinates before injecting input.
 + (int)screenHeight;
 
+// Pixel width of screen 0 (same origin convention as screenHeight).
++ (int)screenWidth;
+
 // Give the X input focus to a mapped window belonging to the given process, so
 // subsequently injected key events reach that application.  In a window-managed
 // desktop the target app is usually NOT the input-focus owner (focus often

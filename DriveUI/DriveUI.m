@@ -28,13 +28,21 @@
  *   app                       -> the app's process name (for run_uitest's
  *                                `activate application "Name"` resolution)
  *   props <object_id>         -> enabled=1|0 state=0|1 for one widget
+ *   parents <object_id>       -> the view/window ancestry of one widget
  *   menu                      -> main menu tree: depth\tindex\ttitle\tenabled\thas_submenu
  *   menu_invoke <i> <j> ...   -> perform the menu item's action at that index path
  *
  * Snapshot fields (tab-separated): depth, class, text, tag, frame,
- * screen_frame, hidden, object_id.  `text` is the displayed (localized)
- * title/stringValue, so drive_ui can find widgets by their on-screen label and
- * then act on the id via X11 at the reported screen_frame.
+ * screen_frame, hidden, object_id, window, stability.  `text` is the displayed
+ * (localized) title/stringValue, so drive_ui can find widgets by their
+ * on-screen label and then act on the id via X11 at the reported screen_frame.
+ * `window` is the title of the owning window (empty for the app row), which
+ * scopes a search when several windows carry the same label.  `stability` is a
+ * per-node handle-quality grade used to pick selectors that survive restarts:
+ *   high   - the app row, or a view with a non-zero tag (an authored
+ *            identifier the app chose, not derived from display text)
+ *   medium - a window row (structural; the title may be translated)
+ *   low    - a plain view, addressable only by its (translated) display text
  *
  * Robustness: the socket server runs on a dedicated background thread that
  * NEVER blocks on the main thread.  Each connection is packaged into a small
@@ -493,6 +501,51 @@ static void WriteAll(int fd, const char *bytes)
                 enabled, state];
               WriteAll(fd, [reply UTF8String]);
             }
+          else if ([cmd isEqualToString: @"parents"])
+            {
+              /* parents <object_id> - the widget's ancestry, one line per
+               * ancestor: "<class>\t<object_id>" from the nearest parent up to
+               * the window, then the class hierarchy of the widget itself
+               * ("superclass: <name>" lines).  Lets diagnostics answer "which
+               * window/container is this nested inside?" and "what kind of
+               * class is it really?" - both invisible in the flat snapshot. */
+              NSString *objID = ([parts count] > 1) ? [parts objectAtIndex: 1] : nil;
+              id obj = [self objectForID: objID];
+              if (obj == nil)
+                {
+                  WriteAll(fd, "error:no object\n");
+                }
+              else
+                {
+                  NSMutableString *reply = [NSMutableString string];
+                  id cur = obj;
+                  while ([cur respondsToSelector: @selector(superview)])
+                    {
+                      NSView *v = [cur performSelector: @selector(superview)];
+                      if (v == nil) break;
+                      [reply appendFormat: @"%@\t%@\n",
+                        NSStringFromClass([v class]),
+                        [self objectIDForObject: v]];
+                      cur = v;
+                    }
+                  if ([cur respondsToSelector: @selector(window)])
+                    {
+                      NSWindow *ownWin = [cur performSelector: @selector(window)];
+                      if (ownWin != nil)
+                        [reply appendFormat: @"%@\t%@\n",
+                          NSStringFromClass([ownWin class]),
+                          [self objectIDForObject: ownWin]];
+                    }
+                  Class c = [obj class];
+                  int guard = 0;
+                  while (c != nil && guard++ < 64)
+                    {
+                      [reply appendFormat: @"superclass: %@\n", NSStringFromClass (c)];
+                      c = [c superclass];
+                    }
+                  WriteAll(fd, [reply UTF8String]);
+                }
+            }
           else if ([cmd isEqualToString: @"menu"])
             {
               /* Read-only: serialize the app's main menu as one line per item:
@@ -858,6 +911,8 @@ static NSString *ShortcutForItem(NSMenuItem *item)
             @"",
             @"0",
             [self objectIDForObject: NSApp],
+            @"",
+            @"high",
             nil];
 }
 
@@ -867,7 +922,9 @@ static NSString *ShortcutForItem(NSMenuItem *item)
     {
       /* `[win frame]` is already in screen coordinates, so it doubles as the
        * screen_frame that lets driving commands (click/hover/scroll/drag)
-       * resolve an on-screen position for the window itself. */
+       * resolve an on-screen position for the window itself.  A window row's
+       * stability is "medium": the title may be translated, but the row is a
+       * structural top of a scope, not display-text-derived detail. */
       NSString *screenFrame = [win isVisible]
         ? NSStringFromRect([win frame]) : @"";
       [items addObject: [NSArray arrayWithObjects:
@@ -879,6 +936,8 @@ static NSString *ShortcutForItem(NSMenuItem *item)
                           screenFrame,
                           [NSNumber numberWithInt: [win isVisible] ? 0 : 1],
                           [self objectIDForObject: win],
+                          [win title] ?: @"",
+                          @"medium",
                           nil]];
 
       [self addView: [win contentView] depth: depth + 1 into: items];
@@ -932,16 +991,19 @@ static NSString *ShortcutForItem(NSMenuItem *item)
           viewHidden = YES;
         }
 
+      int tag = [view isKindOfClass: [NSControl class]] ? (int)[(NSControl *)view tag] : 0;
+      NSString *ownTitle = ownWin ? ([ownWin title] ?: @"") : @"";
       [items addObject: [NSArray arrayWithObjects:
                           [NSNumber numberWithInt: depth],
                           NSStringFromClass([view class]),
                           text,
-                          [NSNumber numberWithInt: [view isKindOfClass: [NSControl class]]
-                                               ? (int)[(NSControl *)view tag] : 0],
+                          [NSNumber numberWithInt: tag],
                           NSStringFromRect([view frame]),
                           screenFrame,
                           [NSNumber numberWithInt: viewHidden ? 1 : 0],
                           [self objectIDForObject: view],
+                          ownTitle,
+                          (tag != 0) ? @"high" : @"low",
                           nil]];
 
       if ([view isKindOfClass: [NSTableView class]])
@@ -1013,6 +1075,8 @@ static NSString *ShortcutForItem(NSMenuItem *item)
                               screenFrame,
                               [NSNumber numberWithInt: isVisible ? 0 : 1],
                               [NSString stringWithFormat: @"row:%p:%ld", tv, (long)r],
+                              w ? ([w title] ?: @"") : @"",
+                              @"low",
                               nil]];
         }
     }
@@ -1244,7 +1308,7 @@ static NSString *ShortcutForItem(NSMenuItem *item)
   NSMutableString *out = [NSMutableString string];
   for (NSArray *row in _snapshot)
     {
-      [out appendFormat: @"%d\t%@\t%@\t%@\t%@\t%@\t%@\t%@\n",
+      [out appendFormat: @"%d\t%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@\t%@\n",
          [[row objectAtIndex: 0] intValue],
          [row objectAtIndex: 1],
          [row objectAtIndex: 2],
@@ -1252,7 +1316,9 @@ static NSString *ShortcutForItem(NSMenuItem *item)
          [row objectAtIndex: 4],
          [row objectAtIndex: 5],
          [row objectAtIndex: 6],
-         [row objectAtIndex: 7]];
+         [row objectAtIndex: 7],
+         ([row count] > 8) ? [row objectAtIndex: 8] : @"",
+         ([row count] > 9) ? [row objectAtIndex: 9] : @"low"];
     }
   return out;
 }

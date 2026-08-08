@@ -203,7 +203,14 @@ for testing.
 
 - **Prefer `wait until` over fixed `wait`.**  `wait until` polls up to 30 s
   (or a `timeout Ns` you add) and passes the moment the condition holds;
-  fixed sleeps are slower and fragile.
+  fixed sleeps are slower and fragile.  For the common "act then confirm"
+  pattern, fold the wait into the action: `click button "Save" and wait until
+  window "Saved"` or `select menu "File/Open" and wait until window "Open"`.
+
+- **Scope ambiguous labels with `in window`.**  When several windows carry the
+  same button/text, add `in window "Title"` to the widget-targeting command
+  (`click`, `wait until`, `assert`, `hover`, `clear`, `scroll`, `drag`, `if`),
+  e.g. `click button "OK" in window "Save As"`.
 
 - **Name the target.**  `activate application "Workspace"` selects the target
   for later commands.  Menu actions on the global menu bar and Dock icon

@@ -80,6 +80,46 @@ tabitem       slider     progress  label
 Object types map to the widget's on-screen title or label, so you can name a
 button or window by what the user sees.
 
+### Scoping a widget to its window
+
+When several windows carry widgets with the same label, add `in window "Title"`
+to resolve the widget inside the named window instead of the first match
+anywhere:
+
+```text
+click button "OK" in window "Save As"
+wait until button "OK" in window "Save As"
+assert button "OK" enabled in window "Save As"
+clear textfield "Search" in window "Find"
+hover button "Send" in window "Mail"
+scroll table "Results" down 3 in window "Main"
+drag window "Inspector" by 40 -20 in window "Main"
+if window "Welcome" in window "App"
+  log "has welcome"
+end
+```
+
+The clause works on every command that targets a widget (`click`, `doubleclick`,
+`rightclick`, `hover`, `clear`, `scroll`, `drag`, `wait until`, `assert`, `if`).
+The window title may be written in English or in the running language, like
+every other title.
+
+### Action and verify in one line
+
+`click` and `select menu` can carry their verification with them using
+`and wait until` - perform the action, then wait (up to 30 s, or a `timeout`
+you add) for the expected result:
+
+```text
+click button "Save" and wait until window "Saved"
+click button "OK" and wait until not dialog "Loading" timeout 5s
+select menu "File/Open" and wait until window "Open"
+```
+
+This is shorthand for the action followed by a `wait until`; it fails with a
+timeout if the condition never holds.  The wait condition takes the same forms
+as `wait until` (`not`, an object type, an optional `timeout Ns`).
+
 ### Language-independent names
 
 Titles may be written in English or in the running language.  When a title is
@@ -456,6 +496,93 @@ repeat 3
   log "attempt"
 end
 ```
+
+## Stable selectors and diagnostics
+
+For agentic driving, `drive_ui` exposes selectors with stability grades, layout
+diagnostics, ancestry, and structured output - the pieces a coding agent uses
+to locate a widget, act on it, and *prove* the result instead of guessing from
+a screenshot.
+
+### Snapshot columns
+
+`get_full_tree` and every resolved row now carry two extra fields:
+
+```text
+depth  class  text  tag  frame  screen_frame  hidden  object_id  window  stability
+```
+
+- `window` - the title of the owning window (empty for the app row).  Use it to
+  scope a search when several windows share a label.
+- `stability` - a handle-quality grade for choosing selectors that survive
+  restarts:
+  - `high` - the app row, or a view with a non-zero `tag` (an authored
+    identifier the app chose, not display text)
+  - `medium` - a window row (structural; the title may be translated)
+  - `low` - a plain view, addressable only by its (translated) display text
+
+Persist `high`/`medium` selectors (class + tag, or window title) across test
+runs; treat `low` text matches as one-shot and re-query rather than storing.
+
+### select
+
+`select` resolves a compound selector and reports how stable the match is.
+A unique match prints the row and a `stability=... window="..."` hint; an
+ambiguous match prints every candidate (with its window and stability) and
+exits 2, so a script can tell "not found" (1) from "unclear which" (2):
+
+```sh
+drive_ui --pid N select --class NSButton --text Dismiss --visible
+drive_ui --pid N select --tag 1000 --window "Save As"
+drive_ui --pid N select --class NSButton --text OK --index 1
+```
+
+Use `--window <title>` and `--index <n>` to pick one of several candidates.
+
+### scroll_into_view
+
+`scroll_into_view <object_id>` wheels toward an instantiated but clipped or
+scrolled-out widget until its center is inside its owning window.  Run it when
+a click/read resolves a row whose center is outside the window's frame (the
+virtualized-row / clipped-target case), then retry the action:
+
+```sh
+drive_ui --pid N scroll_into_view <object_id>
+drive_ui --pid N click <object_id>
+```
+
+### diagnose and parents
+
+`diagnose` runs layout checks on a resolved widget - zero-size frame, hidden,
+off-screen window, or a widget whose screen position lies outside its owning
+window (the clipped / scrolled-out case that breaks click-by-center):
+
+```sh
+drive_ui --pid N diagnose --class EauAlertPanel
+drive_ui --pid N diagnose --text "Save As" --window "Main"
+```
+
+`parents <object_id>` reports a widget's view/window ancestry and its class
+hierarchy - the nesting and true class that the flat snapshot hides:
+
+```sh
+drive_ui --pid N parents <object_id>
+```
+
+### Structured output
+
+`get_full_tree --json` emits the whole tree as a JSON array of objects (titles
+with quotes/newlines come out escaped and parseable), and `get_many` reads the
+text of several widgets in one command:
+
+```sh
+drive_ui --pid N get_full_tree --json
+drive_ui --pid N get_many <object_id> <object_id> ...
+```
+
+Prefer these structured forms over `capture screenshot` when a test or agent
+must *verify* something: the tree and its properties are exact, while a PNG
+only shows what a screenshot seems to show.
 
 ## Design principles
 

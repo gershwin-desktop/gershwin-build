@@ -62,6 +62,8 @@ typedef enum
   DDSCmdClick,
   DDSCmdDoubleClick,
   DDSCmdRightClick,
+  DDSCmdClickAndWait,
+  DDSCmdMenuAndWait,
   DDSCmdContextMenu,
   DDSCmdHover,
   DDSCmdScroll,
@@ -120,6 +122,7 @@ typedef enum
 
 NSString *UITestRoleClassName(UITestRole role);   /* maps a role to an ObjC class filter */
 UITestRole UITestRoleFromName(NSString *name);    /* maps the UITest role keyword to UITestRole */
+NSString *UITestRoleName(UITestRole role);        /* maps a role back to its UITest keyword */
 
 typedef enum
 {
@@ -150,6 +153,10 @@ typedef enum
   UITestAssertKind assertKind_;
   NSString *string_;       /* the quoted main string (title/text/path)   */
   NSString *string2_;      /* optional second string (e.g. assert target) */
+  NSString *windowTitle_;  /* optional "in window \"Title\"" scope        */
+  UITestRole waitRole_;    /* compound "... and wait until <role>" target */
+  int clickButton_;        /* compound verb's pointer button (1=left,3=right) */
+  int clickCount_;         /* compound verb's click count (1 or 2 for double) */
   NSMutableArray *words_;  /* free-form word tokens for this command */
   NSMutableArray *body_;   /* sub-commands of a repeat/if/macro block    */
   NSMutableArray *elseBody_; /* sub-commands of an if block's else clause */
@@ -162,6 +169,10 @@ typedef enum
 @property UITestAssertKind assertKind;
 @property (retain) NSString *string;
 @property (retain) NSString *string2;
+@property (retain) NSString *windowTitle;
+@property UITestRole waitRole;
+@property int clickButton;
+@property int clickCount;
 @property (readonly) NSMutableArray *words;
 @property (readonly) NSMutableArray *body;
 @property (readonly) NSMutableArray *elseBody;
@@ -225,18 +236,21 @@ typedef enum
 - (NSString *)appName;
 
 - (BOOL)doesWidgetExist:(UITestRole)role title:(NSString *)title
-           contains:(NSString *)needle error:(NSString **)err;
+           contains:(NSString *)needle inWindow:(NSString *)windowTitle
+               error:(NSString **)err;
 - (NSString *)frameOfWindowTitle:(NSString *)title error:(NSString **)err;
 - (BOOL)closeWindowTitle:(NSString *)title error:(NSString **)err;
 - (BOOL)invokeModalButton:(NSString *)which error:(NSString **)err;
-- (BOOL)clickRole:(UITestRole)role title:(NSString *)title
+- (BOOL)clickRole:(UITestRole)role title:(NSString *)title inWindow:(NSString *)windowTitle
           button:(int)button count:(int)count error:(NSString **)err;
-- (BOOL)hoverRole:(UITestRole)role title:(NSString *)title error:(NSString **)err;
+- (BOOL)hoverRole:(UITestRole)role title:(NSString *)title inWindow:(NSString *)windowTitle
+             error:(NSString **)err;
 - (BOOL)contextMenuRole:(UITestRole)role title:(NSString *)title
-              itemTitle:(NSString *)itemTitle error:(NSString **)err;
-- (BOOL)scrollRole:(UITestRole)role title:(NSString *)title
+              itemTitle:(NSString *)itemTitle inWindow:(NSString *)windowTitle
+                   error:(NSString **)err;
+- (BOOL)scrollRole:(UITestRole)role title:(NSString *)title inWindow:(NSString *)windowTitle
         direction:(NSString *)direction amount:(int)amount error:(NSString **)err;
-- (BOOL)dragRole:(UITestRole)role title:(NSString *)title
+- (BOOL)dragRole:(UITestRole)role title:(NSString *)title inWindow:(NSString *)windowTitle
             byX:(double)dx byY:(double)dy error:(NSString **)err;
 - (BOOL)selectMenuPath:(NSString *)path error:(NSString **)err;
 - (BOOL)assertMenuItemPath:(NSString *)path kind:(UITestAssertKind)kind
@@ -249,7 +263,8 @@ typedef enum
 - (BOOL)runCommandInRunDialog:(NSString *)command error:(NSString **)err;
 - (NSString *)localizeString:(NSString *)english;
 - (BOOL)type:(NSString *)text error:(NSString **)err;
-- (BOOL)clearRole:(UITestRole)role title:(NSString *)title error:(NSString **)err;
+- (BOOL)clearRole:(UITestRole)role title:(NSString *)title inWindow:(NSString *)windowTitle
+             error:(NSString **)err;
 - (BOOL)pressKeyCombo:(NSString *)combo error:(NSString **)err;
 
 /* Dump the current visible widget tree as text (used by `record`).  Returns
@@ -258,7 +273,7 @@ typedef enum
 
 /* Read the live properties (enabled/checked) of the widget matching role+title.
  * Both out params may be NULL.  Uses drive_ui's read-only `props` command. */
-- (BOOL)propsForRole:(UITestRole)role title:(NSString *)title
+- (BOOL)propsForRole:(UITestRole)role title:(NSString *)title inWindow:(NSString *)windowTitle
              enabled:(BOOL *)enabled checked:(BOOL *)checked error:(NSString **)err;
 
 /* Capture the current screen to an X11 window shot.  path may be nil for a
@@ -266,8 +281,20 @@ typedef enum
 - (BOOL)captureScreenshotToPath:(NSString *)path outPath:(NSString **)outPath
                           error:(NSString **)err;
 
-- (BOOL)assertRole:(UITestRole)role title:(NSString *)title kind:(UITestAssertKind)kind
+- (BOOL)assertRole:(UITestRole)role title:(NSString *)title inWindow:(NSString *)windowTitle
+              kind:(UITestAssertKind)kind
         needle:(NSString *)needle error:(NSString **)err;
+
+/* Locate a matching widget's object_id, optionally scoped to a window title. */
+- (NSString *)objectIDForRole:(UITestRole)role title:(NSString *)title
+                 inWindow:(NSString *)windowTitle error:(NSString **)err;
+
+/* Poll until a widget matching role+title (optionally in a window) exists - or,
+ * with notExists, disappears - or `timeout` seconds elapse.  Used by the
+ * compound "action ... and wait until ..." verbs.  Returns YES on success. */
+- (BOOL)waitUntilRole:(UITestRole)role title:(NSString *)title
+             inWindow:(NSString *)windowTitle notExists:(BOOL)notExists
+              timeout:(double)timeout error:(NSString **)err;
 @end
 
 /* Walks UITestProgram.commands sequentially, applying the error policy. */

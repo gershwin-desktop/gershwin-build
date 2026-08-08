@@ -34,6 +34,7 @@
 {
   [string_ release];
   [string2_ release];
+  [windowTitle_ release];
   [words_ release];
   [body_ release];
   [elseBody_ release];
@@ -49,6 +50,14 @@
 - (void)setString:(NSString *)s { [s retain]; [string_ release]; string_ = s; }
 - (NSString *)string2 { return string2_; }
 - (void)setString2:(NSString *)s { [s retain]; [string2_ release]; string2_ = s; }
+- (NSString *)windowTitle { return windowTitle_; }
+- (void)setWindowTitle:(NSString *)s { [s retain]; [windowTitle_ release]; windowTitle_ = s; }
+- (UITestRole)waitRole { return waitRole_; }
+- (void)setWaitRole:(UITestRole)r { waitRole_ = r; }
+- (int)clickButton { return clickButton_; }
+- (void)setClickButton:(int)b { clickButton_ = b; }
+- (int)clickCount { return clickCount_; }
+- (void)setClickCount:(int)c { clickCount_ = c; }
 - (NSMutableArray *)words { return words_; }
 - (NSMutableArray *)body { return body_; }
 - (NSMutableArray *)elseBody { return elseBody_; }
@@ -119,6 +128,45 @@ UITestRole UITestRoleFromName(NSString *name)
       nil];
   NSNumber *n = [map objectForKey: [name lowercaseString]];
   return n ? (UITestRole)[n intValue] : DDSRoleAny;
+}
+
+/* Maps a role back to its UITest keyword (the inverse of UITestRoleFromName).
+ * Used to render commands in the execution log so agents see
+ * `click button "OK"` rather than `click nsbutton "OK"`. */
+NSString *UITestRoleName(UITestRole role)
+{
+  switch (role)
+    {
+      case DDSRoleApplication: return @"application";
+      case DDSRoleWindow:      return @"window";
+      case DDSRoleXWindow:     return @"xwindow";
+      case DDSRoleDialog:      return @"dialog";
+      case DDSRoleModal:       return @"modal";
+      case DDSRoleSidebar:     return @"sidebar";
+      case DDSRoleSheet:       return @"sheet";
+      case DDSRoleButton:      return @"button";
+      case DDSRoleMenu:        return @"menu";
+      case DDSRoleMenuItem:    return @"menuitem";
+      case DDSRoleTextField:   return @"textfield";
+      case DDSRoleTextArea:    return @"textarea";
+      case DDSRoleCheckbox:    return @"checkbox";
+      case DDSRoleRadio:       return @"radio";
+      case DDSRolePopup:       return @"popup";
+      case DDSRoleComboBox:    return @"combobox";
+      case DDSRoleTable:       return @"table";
+      case DDSRoleRow:         return @"row";
+      case DDSRoleColumn:      return @"column";
+      case DDSRoleList:        return @"list";
+      case DDSRoleImage:       return @"image";
+      case DDSRoleToolbar:     return @"toolbar";
+      case DDSRoleTab:         return @"tab";
+      case DDSRoleTabItem:     return @"tabitem";
+      case DDSRoleSlider:      return @"slider";
+      case DDSRoleProgress:    return @"progress";
+      case DDSRoleLabel:       return @"label";
+      case DDSRoleIcon:        return @"icon";
+      default:                 return nil;
+    }
 }
 
 /* Maps a role to the ObjC class substring used to filter drive_ui snapshots.
@@ -245,6 +293,64 @@ case DDSRoleLabel:                        return @"NSTextField";
   return prog;
 }
 
+/* Consume an optional `in window "Title"` clause from the remaining word
+ * tokens (which hold the literal "in" "window" anywhere in the tail - e.g.
+ * `assert button "OK" enabled in window "Save"`).  On success sets the
+ * command's windowTitle to the next unconsumed quoted string and advances the
+ * quote index.  The clause is a disambiguation scope: the widget is resolved
+ * inside the named window instead of the first match anywhere. */
+- (BOOL)consumeWindowClauseIn:(NSMutableArray *)words command:(UITestCommand *)cmd
+                       quotes:(NSArray *)quotes quoteIndex:(NSUInteger *)qi
+{
+  for (NSUInteger i = 0; i + 1 < [words count]; i++)
+    {
+      if ([[words objectAtIndex: i] isEqualToString: @"in"]
+          && [[words objectAtIndex: i + 1] isEqualToString: @"window"])
+        {
+          if (*qi < [quotes count]) cmd.windowTitle = [quotes objectAtIndex: *qi];
+          (*qi)++;
+          [words removeObjectsInRange: NSMakeRange(i, 2)];
+          return YES;
+        }
+    }
+  return NO;
+}
+
+/* Consume a compound `and wait until [not] [exists] [role] "Title"
+ * [timeout <dur>]` clause.  On success sets the command's wait role, the wait
+ * condition (exists / not exists) and the wait title, and advances the quote
+ * index past the consumed string.  The caller flips the command type to the
+ * compound variant (DDSCmdClickAndWait / DDSCmdMenuAndWait) so the executor
+ * runs the action first and then waits for the condition. */
+- (BOOL)consumeWaitClauseIn:(NSMutableArray *)words command:(UITestCommand *)cmd
+                     quotes:(NSArray *)quotes quoteIndex:(NSUInteger *)qi
+{
+  if ([words count] < 3
+      || ![[words objectAtIndex: 0] isEqualToString: @"and"]
+      || ![[words objectAtIndex: 1] isEqualToString: @"wait"]
+      || ![[words objectAtIndex: 2] isEqualToString: @"until"])
+    return NO;
+  [words removeObjectsInRange: NSMakeRange(0, 3)];
+  BOOL notExists = NO;
+  if ([words count] > 0 && [[words objectAtIndex: 0] isEqualToString: @"not"])
+    { notExists = YES; [words removeObjectAtIndex: 0]; }
+  if ([words count] > 0 && [[words objectAtIndex: 0] isEqualToString: @"exists"])
+    [words removeObjectAtIndex: 0];
+  UITestRole waitRole = DDSRoleAny;
+  if ([words count] > 0)
+    {
+      UITestRole r = UITestRoleFromName([words objectAtIndex: 0]);
+      if (r != DDSRoleAny) { waitRole = r; [words removeObjectAtIndex: 0]; }
+    }
+  cmd.waitRole = waitRole;
+  cmd.assertKind = notExists ? DDSAssertNotExists : DDSAssertExists;
+  if (*qi < [quotes count]) cmd.string2 = [quotes objectAtIndex: *qi];
+  (*qi)++;
+  if ([words count] >= 2 && [[words objectAtIndex: 0] isEqualToString: @"timeout"])
+    [cmd.words addObject: [words objectAtIndex: 1]];
+  return YES;
+}
+
 - (UITestProgram *)parseString:(NSString *)text sourceName:(NSString *)name
                      program:(UITestProgram *)prog error:(NSString **)err
 {
@@ -358,6 +464,7 @@ case DDSRoleLabel:                        return @"NSTextField";
        * embedded spaces inside quotes (e.g. type "to the moon"). */
       NSScanner *scanner = [NSScanner scannerWithString: line];
       NSMutableArray *words = [NSMutableArray array];
+      NSMutableArray *quotes = [NSMutableArray array];  /* all "..." strings, in order */
       NSString *str1 = nil;
       NSString *str2 = nil;
       [scanner setCharactersToBeSkipped: [NSCharacterSet whitespaceCharacterSet]];
@@ -381,6 +488,7 @@ case DDSRoleLabel:                        return @"NSTextField";
               NSString *s = [[[acc copy] autorelease]
                 stringByReplacingOccurrencesOfString: @"\\\"" withString: @"\""];
               s = [s stringByReplacingOccurrencesOfString: @"\\\\" withString: @"\\"];
+              [quotes addObject: s];
               if (!str1) str1 = s;
               else if (!str2) str2 = s;
             }
@@ -518,6 +626,12 @@ case DDSRoleLabel:                        return @"NSTextField";
               cmd = [[[UITestCommand alloc] initWithType: DDSCmdSelectMenu
                 line: lineNo col: 1] autorelease];
               cmd.string = str1;
+              /* select menu "..." and wait until window "..." - select, then
+               * wait for the expected result. */
+              NSUInteger qi = 1;
+              if ([self consumeWaitClauseIn: words command: cmd
+                                     quotes: quotes quoteIndex: &qi])
+                cmd.type = DDSCmdMenuAndWait;
             }
         }
       else if ([kw isEqualToString: @"click"])
@@ -527,6 +641,12 @@ case DDSRoleLabel:                        return @"NSTextField";
           cmd.role = ([words count] > 0) ? UITestRoleFromName([words objectAtIndex: 0]) : DDSRoleAny;
           if ([words count] > 0) [words removeObjectAtIndex: 0];
           cmd.string = str1;
+          cmd.clickButton = 1;
+          cmd.clickCount = 1;
+          NSUInteger qi = 1;
+          [self consumeWindowClauseIn: words command: cmd quotes: quotes quoteIndex: &qi];
+          if ([self consumeWaitClauseIn: words command: cmd quotes: quotes quoteIndex: &qi])
+            cmd.type = DDSCmdClickAndWait;
         }
       else if ([kw isEqualToString: @"doubleclick"])
         {
@@ -535,6 +655,8 @@ case DDSRoleLabel:                        return @"NSTextField";
           cmd.role = ([words count] > 0) ? UITestRoleFromName([words objectAtIndex: 0]) : DDSRoleAny;
           if ([words count] > 0) [words removeObjectAtIndex: 0];
           cmd.string = str1;
+          NSUInteger qi = 1;
+          [self consumeWindowClauseIn: words command: cmd quotes: quotes quoteIndex: &qi];
         }
       else if ([kw isEqualToString: @"context"])
         {
@@ -558,6 +680,8 @@ case DDSRoleLabel:                        return @"NSTextField";
           cmd.role = ([words count] > 0) ? UITestRoleFromName([words objectAtIndex: 0]) : DDSRoleAny;
           if ([words count] > 0) [words removeObjectAtIndex: 0];
           cmd.string = str1;
+          NSUInteger qi = 1;
+          [self consumeWindowClauseIn: words command: cmd quotes: quotes quoteIndex: &qi];
         }
       else if ([kw isEqualToString: @"type"])
         {
@@ -572,6 +696,8 @@ case DDSRoleLabel:                        return @"NSTextField";
           cmd.role = ([words count] > 0) ? UITestRoleFromName([words objectAtIndex: 0]) : DDSRoleAny;
           if ([words count] > 0) [words removeObjectAtIndex: 0];
           cmd.string = str1;
+          NSUInteger qi = 1;
+          [self consumeWindowClauseIn: words command: cmd quotes: quotes quoteIndex: &qi];
         }
       else if ([kw isEqualToString: @"press"])
         {
@@ -604,6 +730,8 @@ case DDSRoleLabel:                        return @"NSTextField";
               cmd.role = ([words count] > 0) ? UITestRoleFromName([words objectAtIndex: 0]) : DDSRoleAny;
               if ([words count] > 0) [words removeObjectAtIndex: 0];
               cmd.string = str1;
+              NSUInteger qi = 1;
+              [self consumeWindowClauseIn: words command: cmd quotes: quotes quoteIndex: &qi];
               /* wait until menu bar "Title" [not] */
               if ([words count] >= 1 && [[words objectAtIndex: 0] isEqualToString: @"bar"])
                 {
@@ -700,6 +828,8 @@ case DDSRoleLabel:                        return @"NSTextField";
               cmd.role = ([words count] > 0) ? UITestRoleFromName([words objectAtIndex: 0]) : DDSRoleAny;
               if ([words count] > 0) [words removeObjectAtIndex: 0];
               cmd.string = str1;
+              NSUInteger qi = 1;
+              [self consumeWindowClauseIn: words command: cmd quotes: quotes quoteIndex: &qi];
               if ([words count] > 0)
                 {
                   NSString *prop = [[words objectAtIndex: 0] lowercaseString];
@@ -749,12 +879,15 @@ case DDSRoleLabel:                        return @"NSTextField";
         }
       else if ([kw isEqualToString: @"hover"])
         {
-          /* hover [role] "title" - move the pointer over the widget. */
+          /* hover [role] "title" [in window "Title"] - move the pointer over
+           * the widget. */
           cmd = [[[UITestCommand alloc] initWithType: DDSCmdHover
             line: lineNo col: 1] autorelease];
           cmd.role = ([words count] > 0) ? UITestRoleFromName([words objectAtIndex: 0]) : DDSRoleAny;
           if ([words count] > 0) [words removeObjectAtIndex: 0];
           cmd.string = str1;
+          NSUInteger qi = 1;
+          [self consumeWindowClauseIn: words command: cmd quotes: quotes quoteIndex: &qi];
         }
       else if ([kw isEqualToString: @"scroll"])
         {
@@ -779,6 +912,8 @@ case DDSRoleLabel:                        return @"NSTextField";
                   cmd.role = UITestRoleFromName(first);
                   if (cmd.role != DDSRoleAny) [words removeObjectAtIndex: 0];
                   cmd.string = str1;
+                  NSUInteger qi = 1;
+                  [self consumeWindowClauseIn: words command: cmd quotes: quotes quoteIndex: &qi];
                   if ([words count] > 0) [cmd.words addObject: [[words objectAtIndex: 0] lowercaseString]];
                   if ([words count] > 1) [cmd.words addObject: [words objectAtIndex: 1]];
                 }
@@ -794,6 +929,8 @@ case DDSRoleLabel:                        return @"NSTextField";
           if ([words count] > 0 && cmd.role != DDSRoleAny)
             [words removeObjectAtIndex: 0];
           cmd.string = str1;
+          NSUInteger qi = 1;
+          [self consumeWindowClauseIn: words command: cmd quotes: quotes quoteIndex: &qi];
           if ([words count] > 0 && [[words objectAtIndex: 0] isEqualToString: @"by"])
             [words removeObjectAtIndex: 0];
           if ([words count] > 0) [cmd.words addObject: [words objectAtIndex: 0]];
@@ -865,6 +1002,8 @@ case DDSRoleLabel:                        return @"NSTextField";
               cmd.role = ([words count] > 0) ? UITestRoleFromName([words objectAtIndex: 0]) : DDSRoleAny;
               if ([words count] > 0) [words removeObjectAtIndex: 0];
               cmd.string = str1;
+              NSUInteger qi = 1;
+              [self consumeWindowClauseIn: words command: cmd quotes: quotes quoteIndex: &qi];
               /* optional docked-state condition */
               if ([words count] > 0 && [[words objectAtIndex: 0] isEqualToString: @"docked"])
                 cmd.assertKind = DDSAssertDocked;

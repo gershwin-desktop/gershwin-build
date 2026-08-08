@@ -434,9 +434,11 @@ static void SetErr(NSString **err, NSString *m)
 }
 
 /* Locate a matching widget's object_id via drive_ui find_widgets / get tree.
- * Returns the object_id line (field 8) or nil. */
+ * `windowTitle` (may be nil) scopes the match to widgets inside the named
+ * window - the disambiguation for repeated labels across windows.  Returns
+ * the object_id line (field 8) or nil. */
 - (NSString *)objectIDForRole:(UITestRole)role title:(NSString *)title
-                  error:(NSString **)err
+                 inWindow:(NSString *)windowTitle error:(NSString **)err
 {
   NSMutableArray *argv = [NSMutableArray arrayWithArray:
     [self argvForSubcommand: @"get_full_tree"]];
@@ -450,10 +452,20 @@ static void SetErr(NSString **err, NSString *m)
       if ([[f objectAtIndex: 6] isEqualToString: @"1"]) continue;
       if (![self class: [f objectAtIndex: 1] matchesRoleClass: cls]) continue;
       if (title && ![self title: [f objectAtIndex: 2] matches: title]) continue;
+      if (windowTitle && [f count] > 8
+          && ![self title: [f objectAtIndex: 8] matches: windowTitle]) continue;
       return [f objectAtIndex: 7];
     }
   SetErr(err, [NSString stringWithFormat: @"no widget matching role/title"]);
   return nil;
+}
+
+/* The window-scoped variant is the primary path; the legacy signature keeps
+ * callers that have no window scope working unchanged. */
+- (NSString *)objectIDForRole:(UITestRole)role title:(NSString *)title
+                  error:(NSString **)err
+{
+  return [self objectIDForRole: role title: title inWindow: nil error: err];
 }
 
 /* Return the on-screen frame string of the first visible window whose title
@@ -504,11 +516,12 @@ static void SetErr(NSString **err, NSString *m)
   return YES;
 }
 
-- (BOOL)clickRole:(UITestRole)role title:(NSString *)title
+- (BOOL)clickRole:(UITestRole)role title:(NSString *)title inWindow:(NSString *)windowTitle
           button:(int)button count:(int)count error:(NSString **)err
 {
   if (pid_ == 0) { SetErr(err, @"no target application"); return NO; }
-  NSString *objID = [self objectIDForRole: role title: title error: err];
+  NSString *objID = [self objectIDForRole: role title: title
+                                 inWindow: windowTitle error: err];
   if (!objID) return NO;
   return [self clickObjectID: objID button: button count: count error: err];
 }
@@ -1078,13 +1091,15 @@ static void SetErr(NSString **err, NSString *m)
   return NO;
 }
 
-- (BOOL)hoverRole:(UITestRole)role title:(NSString *)title error:(NSString **)err
+- (BOOL)hoverRole:(UITestRole)role title:(NSString *)title inWindow:(NSString *)windowTitle
+             error:(NSString **)err
 {
   if (pid_ == 0) { SetErr(err, @"no target application"); return NO; }
   /* `hover` needs no widget resolution convenience here because drive_ui
    * resolves the id to a screen position and moves the real pointer over it;
    * we only hand it the id. */
-  NSString *objID = [self objectIDForRole: role title: title error: err];
+  NSString *objID = [self objectIDForRole: role title: title
+                                 inWindow: windowTitle error: err];
   if (!objID) return NO;
   NSMutableArray *args = [NSMutableArray arrayWithArray:
     [self argvForSubcommand: @"hover"]];
@@ -1093,10 +1108,12 @@ static void SetErr(NSString **err, NSString *m)
 }
 
 - (BOOL)contextMenuRole:(UITestRole)role title:(NSString *)title
-              itemTitle:(NSString *)itemTitle error:(NSString **)err
+              itemTitle:(NSString *)itemTitle inWindow:(NSString *)windowTitle
+                   error:(NSString **)err
 {
   if (pid_ == 0) { SetErr(err, @"no target application"); return NO; }
-  NSString *objID = [self objectIDForRole: role title: title error: err];
+  NSString *objID = [self objectIDForRole: role title: title
+                                 inWindow: windowTitle error: err];
   if (!objID) return NO;
   NSMutableArray *args = [NSMutableArray arrayWithArray:
     [self argvForSubcommand: @"context_menu"]];
@@ -1111,7 +1128,7 @@ static void SetErr(NSString **err, NSString *m)
   return NO;
 }
 
-- (BOOL)scrollRole:(UITestRole)role title:(NSString *)title
+- (BOOL)scrollRole:(UITestRole)role title:(NSString *)title inWindow:(NSString *)windowTitle
         direction:(NSString *)direction amount:(int)amount error:(NSString **)err
 {
   if (pid_ == 0) { SetErr(err, @"no target application"); return NO; }
@@ -1119,7 +1136,8 @@ static void SetErr(NSString **err, NSString *m)
     [self argvForSubcommand: @"scroll"]];
   if (role != DDSRoleAny)
     {
-      NSString *objID = [self objectIDForRole: role title: title error: err];
+      NSString *objID = [self objectIDForRole: role title: title
+                                     inWindow: windowTitle error: err];
       if (!objID) return NO;
       [args addObject: objID];
     }
@@ -1129,11 +1147,12 @@ static void SetErr(NSString **err, NSString *m)
   return [self runCollect: args error: err] != nil;
 }
 
-- (BOOL)dragRole:(UITestRole)role title:(NSString *)title
+- (BOOL)dragRole:(UITestRole)role title:(NSString *)title inWindow:(NSString *)windowTitle
             byX:(double)dx byY:(double)dy error:(NSString **)err
 {
   if (pid_ == 0) { SetErr(err, @"no target application"); return NO; }
-  NSString *objID = [self objectIDForRole: role title: title error: err];
+  NSString *objID = [self objectIDForRole: role title: title
+                                 inWindow: windowTitle error: err];
   if (!objID) return NO;
   NSMutableArray *args = [NSMutableArray arrayWithArray:
     [self argvForSubcommand: @"drag"]];
@@ -1164,10 +1183,12 @@ static void SetErr(NSString **err, NSString *m)
   return out != nil;
 }
 
-- (BOOL)clearRole:(UITestRole)role title:(NSString *)title error:(NSString **)err
+- (BOOL)clearRole:(UITestRole)role title:(NSString *)title inWindow:(NSString *)windowTitle
+             error:(NSString **)err
 {
   if (pid_ == 0) { SetErr(err, @"no application target"); return NO; }
-  NSString *objID = [self objectIDForRole: role title: title error: err];
+  NSString *objID = [self objectIDForRole: role title: title
+                                 inWindow: windowTitle error: err];
   if (!objID) return NO;
   NSMutableArray *args = [NSMutableArray arrayWithArray:
     [self argvForSubcommand: @"clear"]];
@@ -1330,7 +1351,8 @@ static void SetErr(NSString **err, NSString *m)
 }
 
 - (BOOL)doesWidgetExist:(UITestRole)role title:(NSString *)title
-           contains:(NSString *)needle error:(NSString **)err
+           contains:(NSString *)needle inWindow:(NSString *)windowTitle
+               error:(NSString **)err
 {
   if (pid_ == 0) { SetErr(err, @"no application target"); return NO; }
   if (role == DDSRoleModal)
@@ -1403,6 +1425,8 @@ static void SetErr(NSString **err, NSString *m)
       if ([hidden isEqualToString: @"1"]) continue;
       if (![self class: lineCls matchesRoleClass: cls]) continue;
       if (title && ![self title: lineText matches: title]) continue;
+      if (windowTitle && [f count] > 8
+          && ![self title: [f objectAtIndex: 8] matches: windowTitle]) continue;
       if (needle)
         {
           if ([self title: lineText matches: needle] == NO) continue;
@@ -1412,13 +1436,15 @@ static void SetErr(NSString **err, NSString *m)
   return NO;
 }
 
-- (BOOL)assertRole:(UITestRole)role title:(NSString *)title kind:(UITestAssertKind)kind
+- (BOOL)assertRole:(UITestRole)role title:(NSString *)title inWindow:(NSString *)windowTitle
+              kind:(UITestAssertKind)kind
         needle:(NSString *)needle error:(NSString **)err
 {
   if (pid_ == 0) { SetErr(err, @"no application target"); return NO; }
   BOOL exists = (kind == DDSAssertContains)
-    ? [self doesWidgetExist: DDSRoleAny title: nil contains: needle error: err]
-    : [self doesWidget: role title: title error: err];
+    ? [self doesWidgetExist: DDSRoleAny title: nil contains: needle
+                   inWindow: windowTitle error: err]
+    : [self doesWidget: role title: title inWindow: windowTitle error: err];
   switch (kind)
     {
       case DDSAssertExists:
@@ -1443,8 +1469,8 @@ static void SetErr(NSString **err, NSString *m)
       {
         if (!exists) { SetErr(err, @"assert failed: widget not found"); return NO; }
         BOOL enabled = NO, checked = NO;
-        if (![self propsForRole: role title: title enabled: &enabled
-                        checked: &checked error: err])
+        if (![self propsForRole: role title: title inWindow: windowTitle
+                        enabled: &enabled checked: &checked error: err])
           { if (err && *err == nil) SetErr(err, @"assert failed: cannot read widget state"); return NO; }
         if (kind == DDSAssertEnabled && !enabled)
           { SetErr(err, @"assert failed: widget is disabled"); return NO; }
@@ -1468,7 +1494,15 @@ static void SetErr(NSString **err, NSString *m)
 /* Internal helper: does a widget matching role+title exist right now? */
 - (BOOL)doesWidget:(UITestRole)role title:(NSString *)title error:(NSString **)err
 {
-  return [self doesWidgetExist: role title: title contains: nil error: err];
+  return [self doesWidget: role title: title inWindow: nil error: err];
+}
+
+/* Window-scoped internal helper used by assertRole:. */
+- (BOOL)doesWidget:(UITestRole)role title:(NSString *)title
+          inWindow:(NSString *)windowTitle error:(NSString **)err
+{
+  return [self doesWidgetExist: role title: title contains: nil
+                      inWindow: windowTitle error: err];
 }
 
 /* Parse a "enabled=1 state=0" reply from drive_ui's props command. */
@@ -1502,11 +1536,12 @@ static void SetErr(NSString **err, NSString *m)
   return foundEnabled || foundChecked;
 }
 
-- (BOOL)propsForRole:(UITestRole)role title:(NSString *)title
+- (BOOL)propsForRole:(UITestRole)role title:(NSString *)title inWindow:(NSString *)windowTitle
              enabled:(BOOL *)enabled checked:(BOOL *)checked error:(NSString **)err
 {
   if (pid_ == 0) { SetErr(err, @"no application target"); return NO; }
-  NSString *objID = [self objectIDForRole: role title: title error: err];
+  NSString *objID = [self objectIDForRole: role title: title
+                                 inWindow: windowTitle error: err];
   if (!objID) return NO;
   NSArray *argv = [NSArray arrayWithObjects:
     [NSString stringWithFormat: @"--pid=%d", pid_], @"props", objID, nil];
@@ -1518,6 +1553,23 @@ static void SetErr(NSString **err, NSString *m)
       return NO;
     }
   return YES;
+}
+
+- (BOOL)waitUntilRole:(UITestRole)role title:(NSString *)title
+             inWindow:(NSString *)windowTitle notExists:(BOOL)notExists
+              timeout:(double)timeout error:(NSString **)err
+{
+  if (pid_ == 0) { SetErr(err, @"no target application"); return NO; }
+  NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow: timeout];
+  while ([[NSDate date] compare: deadline] == NSOrderedAscending)
+    {
+      BOOL present = [self doesWidgetExist: role title: title contains: nil
+                                  inWindow: windowTitle error: nil];
+      if (notExists ? !present : present) return YES;
+      usleep (100000);
+    }
+  SetErr(err, @"timed out waiting for condition");
+  return NO;
 }
 
 - (BOOL)captureScreenshotToPath:(NSString *)path outPath:(NSString **)outPath

@@ -109,6 +109,8 @@ static NSString *CommandName(UITestCommandType t)
       case DDSCmdClick:       return @"click";
       case DDSCmdDoubleClick: return @"doubleclick";
       case DDSCmdRightClick:  return @"rightclick";
+      case DDSCmdClickAndWait: return @"click and wait until";
+      case DDSCmdMenuAndWait: return @"select menu and wait until";
       case DDSCmdContextMenu: return @"context menu";
       case DDSCmdHover:       return @"hover";
       case DDSCmdScroll:      return @"scroll";
@@ -136,17 +138,22 @@ static NSString *CommandName(UITestCommandType t)
 {
   NSMutableString *s = [NSMutableString stringWithString: CommandName(cmd.type)];
   if ((cmd.type == DDSCmdClick || cmd.type == DDSCmdDoubleClick ||
-       cmd.type == DDSCmdRightClick || cmd.type == DDSCmdClear ||
-       cmd.type == DDSCmdHover || cmd.type == DDSCmdDrag) &&
+       cmd.type == DDSCmdRightClick || cmd.type == DDSCmdClickAndWait ||
+       cmd.type == DDSCmdClear || cmd.type == DDSCmdHover ||
+       cmd.type == DDSCmdDrag) &&
       cmd.role != DDSRoleAny)
     {
-      [s appendFormat: @" %@", [[UITestRoleClassName(cmd.role) lowercaseString]
-        stringByReplacingOccurrencesOfString: @"ns" withString: @"ns"]];
+      NSString *rn = UITestRoleName(cmd.role);
+      if (rn) [s appendFormat: @" %@", rn];
     }
   if (cmd.type == DDSCmdScroll && cmd.role != DDSRoleAny)
-    [s appendFormat: @" %@", [[UITestRoleClassName(cmd.role) lowercaseString]
-      stringByReplacingOccurrencesOfString: @"ns" withString: @"ns"]];
+    {
+      NSString *rn = UITestRoleName(cmd.role);
+      if (rn) [s appendFormat: @" %@", rn];
+    }
   if (cmd.string) [s appendFormat: @" \"%@\"", cmd.string];
+  if (cmd.windowTitle)
+    [s appendFormat: @" in window \"%@\"", cmd.windowTitle];
   if (cmd.type == DDSCmdRepeat && [[cmd words] count] > 0)
     [s appendFormat: @" %@", [[cmd words] objectAtIndex: 0]];
   if (cmd.type == DDSCmdScroll && [[cmd words] count] > 0)
@@ -159,6 +166,13 @@ static NSString *CommandName(UITestCommandType t)
     {
       [s appendFormat: @" by %@", [[cmd words] objectAtIndex: 0]];
       if ([[cmd words] count] > 1) [s appendFormat: @" %@", [[cmd words] objectAtIndex: 1]];
+    }
+  if (cmd.type == DDSCmdClickAndWait || cmd.type == DDSCmdMenuAndWait)
+    {
+      NSString *waitRoleName = UITestRoleName(cmd.waitRole);
+      if (cmd.assertKind == DDSAssertNotExists) [s appendString: @" not"];
+      if (waitRoleName) [s appendFormat: @" %@", waitRoleName];
+      if (cmd.string2) [s appendFormat: @" \"%@\"", cmd.string2];
     }
   return s;
 }
@@ -234,27 +248,72 @@ static NSString *CommandName(UITestCommandType t)
       {
         int btn = (cmd.type == DDSCmdRightClick) ? 3 : 1;
         int cnt = (cmd.type == DDSCmdDoubleClick) ? 2 : 1;
-        rc = [engine_ clickRole: cmd.role title: cmd.string button: btn
-          count: cnt error: &err] ? 0 : DDSAccessibilityError;
+        rc = [engine_ clickRole: cmd.role title: cmd.string inWindow: cmd.windowTitle
+          button: btn count: cnt error: &err] ? 0 : DDSAccessibilityError;
+      }
+      break;
+    case DDSCmdClickAndWait:
+      {
+        /* Compound verb: perform the click, then wait for the stated condition.
+         * `click button "OK" and wait until window "Saving"`. */
+        if (cmd.clickButton == 0) { cmd.clickButton = 1; cmd.clickCount = 1; }
+        if ([engine_ clickRole: cmd.role title: cmd.string inWindow: cmd.windowTitle
+          button: cmd.clickButton count: cmd.clickCount error: &err])
+          {
+            double to = 30.0;
+            if ([[cmd words] count] > 0)
+              to = [UITestExecutor durationForString: [[cmd words] objectAtIndex: 0]];
+            if ([engine_ waitUntilRole: cmd.waitRole title: cmd.string2
+                               inWindow: nil
+                notExists: (cmd.assertKind == DDSAssertNotExists)
+                          timeout: to error: &err])
+              rc = 0;
+            else
+              rc = DDSTimeout;
+          }
+        else
+          rc = DDSAccessibilityError;
+      }
+      break;
+    case DDSCmdMenuAndWait:
+      {
+        /* Compound verb: select the menu item, then wait for the condition.
+         * `select menu "File/Open" and wait until window "Open"`. */
+        if ([engine_ selectMenuPath: cmd.string error: &err])
+          {
+            double to = 30.0;
+            if ([[cmd words] count] > 0)
+              to = [UITestExecutor durationForString: [[cmd words] objectAtIndex: 0]];
+            if ([engine_ waitUntilRole: cmd.waitRole title: cmd.string2
+                               inWindow: nil
+                notExists: (cmd.assertKind == DDSAssertNotExists)
+                          timeout: to error: &err])
+              rc = 0;
+            else
+              rc = DDSTimeout;
+          }
+        else
+          rc = DDSAccessibilityError;
       }
       break;
     case DDSCmdHover:
-      rc = [engine_ hoverRole: cmd.role title: cmd.string error: &err]
-        ? 0 : DDSAccessibilityError;
+      rc = [engine_ hoverRole: cmd.role title: cmd.string inWindow: cmd.windowTitle
+        error: &err] ? 0 : DDSAccessibilityError;
       break;
     case DDSCmdContextMenu:
       if (!cmd.string || !cmd.string2)
         { err = @"context menu needs \"Widget\" \"Item Title\""; rc = 1; break; }
       rc = ([engine_ contextMenuRole: cmd.role title: cmd.string
-          itemTitle: cmd.string2 error: &err]) ? 0 : DDSAccessibilityError;
+          itemTitle: cmd.string2 inWindow: cmd.windowTitle error: &err])
+        ? 0 : DDSAccessibilityError;
       break;
     case DDSCmdScroll:
       {
         NSString *dir = ([[cmd words] count] > 0) ? [[cmd words] objectAtIndex: 0] : @"down";
         int amount = 1;
         if ([[cmd words] count] > 1) amount = [[[cmd words] objectAtIndex: 1] intValue];
-        rc = [engine_ scrollRole: cmd.role title: cmd.string direction: dir
-          amount: amount error: &err] ? 0 : DDSAccessibilityError;
+        rc = [engine_ scrollRole: cmd.role title: cmd.string inWindow: cmd.windowTitle
+          direction: dir amount: amount error: &err] ? 0 : DDSAccessibilityError;
       }
       break;
     case DDSCmdDrag:
@@ -271,16 +330,16 @@ static NSString *CommandName(UITestCommandType t)
             rc = 1;
             break;
           }
-        rc = [engine_ dragRole: cmd.role title: cmd.string byX: dx byY: dy
-          error: &err] ? 0 : DDSAccessibilityError;
+        rc = [engine_ dragRole: cmd.role title: cmd.string inWindow: cmd.windowTitle
+          byX: dx byY: dy error: &err] ? 0 : DDSAccessibilityError;
       }
       break;
     case DDSCmdType:
       rc = [engine_ type: cmd.string error: &err] ? 0 : DDSAccessibilityError;
       break;
     case DDSCmdClear:
-      rc = [engine_ clearRole: cmd.role title: cmd.string error: &err]
-        ? 0 : DDSAccessibilityError;
+      rc = [engine_ clearRole: cmd.role title: cmd.string inWindow: cmd.windowTitle
+        error: &err] ? 0 : DDSAccessibilityError;
       break;
     case DDSCmdPress:
       /* `press` with no argument means Return (the common submit action). */
@@ -318,7 +377,7 @@ static NSString *CommandName(UITestCommandType t)
             else
               {
                 BOOL present = [engine_ doesWidgetExist: cmd.role title: cmd.string
-                  contains: nil error: &err];
+                  contains: nil inWindow: cmd.windowTitle error: &err];
                 ok = (cmd.assertKind == DDSAssertNotExists) ? !present : present;
               }
             if (ok) break;
@@ -384,8 +443,8 @@ static NSString *CommandName(UITestCommandType t)
           err = e2;
         }
       else
-        rc = [engine_ assertRole: cmd.role title: cmd.string kind: cmd.assertKind
-          needle: cmd.string error: &err] ? 0 : DDSAssertFailed;
+        rc = [engine_ assertRole: cmd.role title: cmd.string inWindow: cmd.windowTitle
+          kind: cmd.assertKind needle: cmd.string error: &err] ? 0 : DDSAssertFailed;
       break;
     case DDSCmdCapture:
       {
@@ -426,7 +485,7 @@ static NSString *CommandName(UITestCommandType t)
             || cmd.assertKind == DDSAssertNotDocked)
           {
             BOOL state = [engine_ assertRole: cmd.role title: cmd.string
-              kind: cmd.assertKind needle: nil error: &err];
+              inWindow: cmd.windowTitle kind: cmd.assertKind needle: nil error: &err];
             BOOL takeThen = state;
             rc = takeThen
               ? [self runSequence: cmd.body applyPolicy: NO]
@@ -450,7 +509,7 @@ static NSString *CommandName(UITestCommandType t)
             break;
           }
         BOOL present = [engine_ doesWidgetExist: cmd.role title: cmd.string
-          contains: nil error: &err];
+          contains: nil inWindow: cmd.windowTitle error: &err];
         BOOL takeThen = (cmd.assertKind == DDSAssertNotExists) ? !present : present;
         rc = takeThen
           ? [self runSequence: cmd.body applyPolicy: NO]

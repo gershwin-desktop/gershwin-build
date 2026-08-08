@@ -14,34 +14,40 @@
  * modal dialogs, key equivalents and text fields behave exactly as if a user
  * operated them, regardless of language.
  *
- *   drive_ui [--pid N] get_full_tree
- *   drive_ui [--pid N] find_widgets [--class C] [--text T] [--tag N] [--visible]
- *   drive_ui [--pid N] click <object_id> | --text <label> [--class C]
- *   drive_ui [--pid N] doubleclick <object_id> | --text <label> [--class C]
- *   drive_ui [--pid N] rightclick <object_id> | --text <label> [--class C]
+ *   drive_ui [--pid N] get_full_tree [--json]
+ *   drive_ui [--pid N] find_widgets [--class C] [--text T] [--tag N] [--window W] [--visible] [--index N]
+ *   drive_ui [--pid N] select [--class C] [--text T] [--tag N] [--window W] [--visible] [--index N]
+ *                            (resolve a stable selector; ambiguous matches list candidates + hints)
+ *   drive_ui [--pid N] click <object_id> | --text <label> [--class C] [--window W] [--index N]
+ *   drive_ui [--pid N] doubleclick <object_id> | --text <label> [--class C] [--window W] [--index N]
+ *   drive_ui [--pid N] rightclick <object_id> | --text <label> [--class C] [--window W] [--index N]
  *   drive_ui [--pid N] hover <object_id>      (move pointer over the widget)
  *   drive_ui [--pid N] scroll <object_id> <dir> [n]
  *   drive_ui [--pid N] scroll <dir> [n]       (scroll at the current pointer)
+ *   drive_ui [--pid N] scroll_into_view <object_id>   (wheel toward a clipped/offscreen widget)
  *   drive_ui [--pid N] drag <object_id> <dx> <dy>   (press + drag by dx,dy)
- *   drive_ui [--pid N] type <object_id> <text> | --text <label> <text> [--class C]
+ *   drive_ui [--pid N] type <object_id> <text> | --text <label> <text> [--class C] [--window W] [--index N]
  *   drive_ui [--pid N] sendkeys <text>          (type into the focused field)
- *   drive_ui [--pid N] clear <object_id> | --text <label> [--class C]
- *   drive_ui [--pid N] focus <object_id> | --text <label> [--class C]
- *   drive_ui [--pid N] get <object_id> | --text <label> [--class C]
+ *   drive_ui [--pid N] clear <object_id> | --text <label> [--class C] [--window W] [--index N]
+ *   drive_ui [--pid N] focus <object_id> | --text <label> [--class C] [--window W] [--index N]
+ *   drive_ui [--pid N] get <object_id> | --text <label> [--class C] [--window W] [--index N]
+ *   drive_ui [--pid N] get_many <object_id> ...  (text of several widgets, one per line)
  *   drive_ui [--pid N] app                     (read-only: app name)
  *   drive_ui [--pid N] props <object_id>        (read-only: enabled/state)
+ *   drive_ui [--pid N] parents <object_id>      (read-only: view/window ancestry + class hierarchy)
+ *   drive_ui [--pid N] diagnose [--class C] [--text T] [--window W] [--index N]   (layout checks)
  *   drive_ui [--pid N] menu                    (read-only: main menu tree)
  *   drive_ui [--pid N] menu_select "Top/Sub"   (perform menu item by title path)
  *   drive_ui [--pid N] menu_invoke <i0> <i1>.. (perform menu action by index)
  *   drive_ui [--pid N] localize <english>       (translate to app language)
- *   drive_ui [--pid N] assert <exists|not-exists|enabled|checked> [--class C] [--text T] [--tag N] [--visible]
+ *   drive_ui [--pid N] assert <exists|not-exists|enabled|checked> [--class C] [--text T] [--tag N] [--window W] [--visible]
  *   drive_ui [--pid N] assert contains --text <needle>
- *   drive_ui [--pid N] wait_until [--class C] [--text T] [--tag N] [--visible] [--timeout N] [--not-exists]
+ *   drive_ui [--pid N] wait_until [--class C] [--text T] [--tag N] [--window W] [--visible] [--timeout N] [--not-exists]
  *   drive_ui [--pid N] capture [<path>]         (screenshot root window to PNG)
  *   drive_ui [--pid N] press                     (press Return)
  *   drive_ui [--pid N] chord <mods> <key>        (e.g. chord control c)
  *
- * Snapshot fields: depth  class  text  tag  frame  screen_frame  hidden  object_id
+ * Snapshot fields: depth  class  text  tag  frame  screen_frame  hidden  object_id  window  stability
  *
  * Because `text` is the displayed (localized) title/stringValue, widgets can be
  * located by their on-screen label; the driving commands then act at that
@@ -190,42 +196,36 @@ static void PrintRow(NSArray *f)
   printf("%s\n", [s UTF8String]);
 }
 
-static void PrintMatching(NSString *out, NSString *wantClass, NSString *wantText,
-                          NSNumber *wantTag, BOOL wantVisible)
+/* Forward declarations: the filter helpers live below with RowMatches. */
+static NSArray *MatchingRows(int pid, NSArray *rows, NSString *wantClass,
+                             NSString *wantText, NSNumber *wantTag,
+                             NSString *wantWindow, BOOL wantVisible);
+static NSArray *PickRow(NSArray *rows, int index);
+
+static void PrintMatching(int pid, NSString *out, NSString *wantClass,
+                          NSString *wantText, NSNumber *wantTag,
+                          NSString *wantWindow, BOOL wantVisible, int index)
 {
-  for (NSArray *f in ParseTree(out))
+  NSArray *matches = MatchingRows(pid, ParseTree(out), wantClass, wantText,
+                                  wantTag, wantWindow, wantVisible);
+  if (index >= 0 && [matches count] > 0)
     {
-      if ([f count] < 8) continue;
-      NSString *cls = [f objectAtIndex: 1];
-      NSString *text = [f objectAtIndex: 2];
-      NSString *tagStr = [f objectAtIndex: 3];
-      NSString *hiddenStr = [f objectAtIndex: 6];
-
-      if (wantVisible && [hiddenStr isEqualToString: @"1"]) continue;
-      if (wantClass && [cls rangeOfString: wantClass options: NSCaseInsensitiveSearch].location == NSNotFound) continue;
-      if (wantText && [text rangeOfString: wantText options: NSCaseInsensitiveSearch].location == NSNotFound) continue;
-      if (wantTag && [tagStr intValue] != [wantTag intValue]) continue;
-
-      PrintRow(f);
+      PrintRow(PickRow(matches, index));
+      return;
     }
+  for (NSArray *f in matches) PrintRow(f);
 }
 
-/* Resolve a widget to a row by (optionally class-scoped) localized text. */
-static NSArray *ResolveRow(NSArray *rows, NSString *wantClass, NSString *wantText, BOOL wantVisible)
+/* Resolve a widget to a row by (optionally class-scoped, window-scoped,
+ * index-addressed) localized text.  `index` selects the Nth matching row. */
+static NSArray *ResolveRow(int pid, NSArray *rows, NSString *wantClass,
+                           NSString *wantText, NSNumber *wantTag,
+                           NSString *wantWindow, BOOL wantVisible, int index)
 {
-  if (!wantText) return nil;
-  for (NSArray *f in rows)
-    {
-      if ([f count] < 8) continue;
-      NSString *cls = [f objectAtIndex: 1];
-      NSString *text = [f objectAtIndex: 2];
-      NSString *hiddenStr = [f objectAtIndex: 6];
-      if (wantVisible && [hiddenStr isEqualToString: @"1"]) continue;
-      if (wantClass && [cls rangeOfString: wantClass options: NSCaseInsensitiveSearch].location == NSNotFound) continue;
-      if ([text rangeOfString: wantText options: NSCaseInsensitiveSearch].location == NSNotFound) continue;
-      return f;
-    }
-  return nil;
+  if (!wantText && !wantTag && !wantWindow) return nil;
+  NSArray *matches = MatchingRows(pid, rows, wantClass, wantText, wantTag,
+                                  wantWindow, wantVisible);
+  return PickRow(matches, index);
 }
 
 /* Resolve a widget row by object_id. */
@@ -377,11 +377,14 @@ static int MenuSelect(int pid, NSString *path)
   return 0;
 }
 
-/* Match a snapshot row against --class/--text/--tag filters.  Text matching is
- * the localized substring match used for title paths.  Returns YES if the row
- * satisfies all supplied filters. */
+/* Match a snapshot row against --class/--text/--tag/--window filters.  Text
+ * matching is the localized substring match used for title paths.  `--window`
+ * scopes the match to a row whose owning window title matches (field 8); a
+ * window row's own title is its window field, so a window filter also selects
+ * the window itself, while the app row (empty window) never matches one.
+ * Returns YES if the row satisfies all supplied filters. */
 static BOOL RowMatches(int pid, NSArray *f, NSString *wantClass, NSString *wText,
-                       NSNumber *wantTag, BOOL wantVisible)
+                       NSNumber *wantTag, NSString *wantWindow, BOOL wantVisible)
 {
   if ([f count] < 8) return NO;
   NSString *cls = [f objectAtIndex: 1];
@@ -392,7 +395,32 @@ static BOOL RowMatches(int pid, NSArray *f, NSString *wantClass, NSString *wText
   if (wantClass && [cls rangeOfString: wantClass options: NSCaseInsensitiveSearch].location == NSNotFound) return NO;
   if (wantTag && [tagStr intValue] != [wantTag intValue]) return NO;
   if (wText && TitleMatches(pid, text, wText) == NO) return NO;
+  if (wantWindow && TitleMatches(pid, [f count] > 8 ? [f objectAtIndex: 8] : @"", wantWindow) == NO) return NO;
   return YES;
+}
+
+/* All snapshot rows satisfying the filters, in tree order. */
+static NSArray *MatchingRows(int pid, NSArray *rows, NSString *wantClass,
+                             NSString *wantText, NSNumber *wantTag,
+                             NSString *wantWindow, BOOL wantVisible)
+{
+  NSMutableArray *out = [NSMutableArray array];
+  for (NSArray *f in rows)
+    {
+      if (RowMatches(pid, f, wantClass, wantText, wantTag, wantWindow, wantVisible))
+        [out addObject: f];
+    }
+  return out;
+}
+
+/* Pick the index-th of a list of rows (clamped; a negative index means "no
+ * index given", which is the only-row or first-row case). */
+static NSArray *PickRow(NSArray *rows, int index)
+{
+  if ([rows count] == 0) return nil;
+  if (index < 0) index = 0;
+  if (index >= (int)[rows count]) index = (int)[rows count] - 1;
+  return [rows objectAtIndex: index];
 }
 
 /* Assert a condition about the widget tree.  Returns 0 if the assertion holds,
@@ -403,7 +431,7 @@ static BOOL RowMatches(int pid, NSArray *f, NSString *wantClass, NSString *wText
  *   checked     - the matching widget exists and is checked
  *   contains    - some visible widget's text contains the --text needle */
 static int AssertWidgets(int pid, NSString *wantClass, NSString *wantText,
-                         NSNumber *wantTag, BOOL wantVisible,
+                         NSNumber *wantTag, NSString *wantWindow, BOOL wantVisible,
                          NSString *kind, NSString *needle)
 {
   NSString *tree = FetchTree(pid);
@@ -432,12 +460,8 @@ static int AssertWidgets(int pid, NSString *wantClass, NSString *wantText,
       return 1;
     }
 
-  NSArray *match = nil;
-  for (NSArray *f in rows)
-    {
-      if (RowMatches(pid, f, wantClass, wantText, wantTag, wantVisible))
-        { match = f; break; }
-    }
+  NSArray *match = PickRow(MatchingRows(pid, rows, wantClass, wantText, wantTag,
+                                        wantWindow, wantVisible), -1);
 
   if ([kind isEqualToString: @"exists"])
     {
@@ -495,8 +519,8 @@ static int AssertWidgets(int pid, NSString *wantClass, NSString *wantText,
  * elapses.  Mirrors the UITest's `wait until`.  Returns 0 on success, 2 on
  * timeout. */
 static int WaitUntil(int pid, NSString *wantClass, NSString *wantText,
-                     NSNumber *wantTag, BOOL wantVisible, double timeout,
-                     BOOL wantNotExists)
+                     NSNumber *wantTag, NSString *wantWindow, BOOL wantVisible,
+                     double timeout, BOOL wantNotExists)
 {
   NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow: timeout];
   while ([[NSDate date] compare: deadline] == NSOrderedAscending)
@@ -504,12 +528,8 @@ static int WaitUntil(int pid, NSString *wantClass, NSString *wantText,
       NSString *tree = FetchTree(pid);
       if (tree)
         {
-          BOOL present = NO;
-          for (NSArray *f in ParseTree(tree))
-            {
-              if (RowMatches(pid, f, wantClass, wantText, wantTag, wantVisible))
-                { present = YES; break; }
-            }
+          BOOL present = ([MatchingRows(pid, ParseTree(tree), wantClass, wantText,
+                                       wantTag, wantWindow, wantVisible) count] > 0);
           BOOL ok = wantNotExists ? !present : present;
           if (ok) return 0;
         }
@@ -581,34 +601,41 @@ static NSPoint CenterOfRow(NSArray *f)
 static void Usage(void)
 {
   printf("Usage:\n");
-  printf("  drive_ui [--pid N] get_full_tree\n");
-  printf("  drive_ui [--pid N] find_widgets [--class C] [--text T] [--tag N] [--visible]\n");
-  printf("  drive_ui [--pid N] click <object_id> | --text <label> [--class C]\n");
-  printf("  drive_ui [--pid N] doubleclick <object_id> | --text <label> [--class C]\n");
-  printf("  drive_ui [--pid N] rightclick <object_id> | --text <label> [--class C]\n");
+  printf("  drive_ui [--pid N] get_full_tree [--json]\n");
+  printf("  drive_ui [--pid N] find_widgets [--class C] [--text T] [--tag N] [--window W] [--visible] [--index N]\n");
+  printf("  drive_ui [--pid N] select [--class C] [--text T] [--tag N] [--window W] [--visible] [--index N]\n");
+  printf("                                (stable-selector resolve; ambiguous -> candidates + hints, exit 2)\n");
+  printf("  drive_ui [--pid N] click <object_id> | --text <label> [--class C] [--window W] [--index N]\n");
+  printf("  drive_ui [--pid N] doubleclick <object_id> | --text <label> [--class C] [--window W] [--index N]\n");
+  printf("  drive_ui [--pid N] rightclick <object_id> | --text <label> [--class C] [--window W] [--index N]\n");
   printf("  drive_ui [--pid N] hover <object_id>          (move pointer over it)\n");
   printf("  drive_ui [--pid N] scroll <object_id> <dir> [n]   (dir=up/down/left/right)\n");
   printf("  drive_ui [--pid N] scroll <dir> [n]           (scroll at pointer)\n");
+  printf("  drive_ui [--pid N] scroll_into_view <object_id> (wheel toward a clipped/offscreen widget)\n");
   printf("  drive_ui [--pid N] drag <object_id> <dx> <dy> (press + drag by dx,dy)\n");
-  printf("  drive_ui [--pid N] type <object_id> <text> | --text <label> <text> [--class C]\n");
+  printf("  drive_ui [--pid N] type <object_id> <text> | --text <label> <text> [--class C] [--window W] [--index N]\n");
   printf("  drive_ui [--pid N] sendkeys <text>          (type into focused field)\n");
-  printf("  drive_ui [--pid N] clear <object_id> | --text <label> [--class C]\n");
-  printf("  drive_ui [--pid N] focus <object_id> | --text <label> [--class C]\n");
-  printf("  drive_ui [--pid N] get <object_id> | --text <label> [--class C]\n");
+  printf("  drive_ui [--pid N] clear <object_id> | --text <label> [--class C] [--window W] [--index N]\n");
+  printf("  drive_ui [--pid N] focus <object_id> | --text <label> [--class C] [--window W] [--index N]\n");
+  printf("  drive_ui [--pid N] get <object_id> | --text <label> [--class C] [--window W] [--index N]\n");
+  printf("  drive_ui [--pid N] get_many <object_id> ...    (text of several widgets, one per line)\n");
   printf("  drive_ui [--pid N] app                       (read-only: app name)\n");
   printf("  drive_ui [--pid N] props <object_id>          (read-only: props)\n");
+  printf("  drive_ui [--pid N] parents <object_id>         (read-only: view/window ancestry)\n");
+  printf("  drive_ui [--pid N] diagnose [--class C] [--text T] [--tag N] [--window W] [--index N]\n");
+  printf("                                (layout checks: zero-size/hidden/off-screen/clipped)\n");
   printf("  drive_ui [--pid N] menu                       (read-only: main menu tree)\n");
   printf("  drive_ui [--pid N] menu_select \"Top/Sub\"     (perform menu item by title path)\n");
   printf("  drive_ui [--pid N] menu_invoke <i0> <i1> ...  (perform menu action by index)\n");
   printf("  drive_ui [--pid N] localize <english>          (translate to app language)\n");
-  printf("  drive_ui [--pid N] assert [--class C] [--text T] [--tag N] [--visible] <exists|not-exists|enabled|checked>\n");
+  printf("  drive_ui [--pid N] assert [--class C] [--text T] [--tag N] [--window W] [--visible] <exists|not-exists|enabled|checked>\n");
   printf("  drive_ui [--pid N] assert contains --text <needle>\n");
-  printf("  drive_ui [--pid N] wait_until [--class C] [--text T] [--tag N] [--visible] [--timeout N] [--not-exists]\n");
+  printf("  drive_ui [--pid N] wait_until [--class C] [--text T] [--tag N] [--window W] [--visible] [--timeout N] [--not-exists]\n");
   printf("  drive_ui [--pid N] capture [<path>]           (screenshot root window to PNG)\n");
   printf("  drive_ui [--pid N] press                     (press Return)\n");
   printf("  drive_ui [--pid N] chord <mods> <key>        (e.g. chord control c)\n");
   printf("  drive_ui [--pid N] modal                     (report current modal window: none or Class|title)\n");
-  printf("Snapshot: depth\\tclass\\ttext\\ttag\\tframe\\tscreen_frame\\thidden\\tobject_id\n");
+  printf("Snapshot: depth\\tclass\\ttext\\ttag\\tframe\\tscreen_frame\\thidden\\tobject_id\\twindow\\tstability\n");
   printf("Actions simulate real X11 pointer/key events at the widget position,\n");
   printf("so they work on localized UIs and in modal dialogs.\n");
 }
@@ -649,8 +676,9 @@ int main(int argc, const char *argv[])
 
   NSString *command = [args objectAtIndex: 0];
 
-  NSString *wantClass = nil, *wantText = nil, *idArg = nil;
+  NSString *wantClass = nil, *wantText = nil, *idArg = nil, *wantWindow = nil;
   NSNumber *wantTag = nil;
+  int wantIndex = -1;
   BOOL wantVisible = NO;
 
   for (NSUInteger i = 1; i < [args count]; i++)
@@ -659,6 +687,8 @@ int main(int argc, const char *argv[])
       if ([a isEqualToString: @"--class"] && i + 1 < [args count]) wantClass = [args objectAtIndex: ++i];
       else if ([a isEqualToString: @"--text"] && i + 1 < [args count]) wantText = [args objectAtIndex: ++i];
       else if ([a isEqualToString: @"--tag"] && i + 1 < [args count]) wantTag = @(atoi([(NSString *)[args objectAtIndex: ++i] UTF8String]));
+      else if ([a isEqualToString: @"--window"] && i + 1 < [args count]) wantWindow = [args objectAtIndex: ++i];
+      else if ([a isEqualToString: @"--index"] && i + 1 < [args count]) wantIndex = atoi([(NSString *)[args objectAtIndex: ++i] UTF8String]);
       else if ([a isEqualToString: @"--visible"]) wantVisible = YES;
       else if ([a hasPrefix: @"objc:"] || [a hasPrefix: @"row:"]) idArg = a;
     }
@@ -666,18 +696,96 @@ int main(int argc, const char *argv[])
   if ([command isEqualToString: @"get_full_tree"])
     {
       NSString *tree = FetchTree(pid);
-      if (tree) printf("%s", [tree UTF8String]);
+      if (!tree)
+        {
+          [pool release];
+          return 1;
+        }
+      /* --json: emit the tree as a JSON array of objects (agent-friendly and
+       * unambiguous - quotes/newlines in titles are escaped instead of breaking
+       * the tab layout).  Each object: depth class text tag frame screen_frame
+       * hidden object_id window stability. */
+      if ([args containsObject: @"--json"])
+        {
+          static NSString *const keys[10] = { @"depth", @"class", @"text",
+            @"tag", @"frame", @"screen_frame", @"hidden", @"object_id",
+            @"window", @"stability" };
+          NSMutableArray *objs = [NSMutableArray array];
+          for (NSArray *f in ParseTree(tree))
+            {
+              NSMutableDictionary *d = [NSMutableDictionary dictionary];
+              for (int i = 0; i < 10 && i < (int)[f count]; i++)
+                [d setObject: [f objectAtIndex: i] forKey: keys[i]];
+              [objs addObject: d];
+            }
+          NSData *data = [NSJSONSerialization dataWithJSONObject: objs
+                                                         options: 0 error: nil];
+          if (data)
+            printf("%s\n", [[[NSString alloc] initWithData: data
+              encoding: NSUTF8StringEncoding] UTF8String]);
+        }
+      else
+        {
+          printf("%s", [tree UTF8String]);
+        }
     }
   else if ([command isEqualToString: @"find_widgets"])
     {
-      if (!wantClass && !wantText && !wantTag && !wantVisible)
+      if (!wantClass && !wantText && !wantTag && !wantWindow && !wantVisible)
         {
-          fprintf(stderr, "drive_ui: find_widgets needs --class, --text, --tag or --visible\n");
+          fprintf(stderr, "drive_ui: find_widgets needs --class, --text, --tag, --window or --visible\n");
           [pool release];
           return 1;
         }
       NSString *tree = FetchTree(pid);
-      PrintMatching(tree, wantClass, wantText, wantTag, wantVisible);
+      PrintMatching(pid, tree, wantClass, wantText, wantTag, wantWindow,
+                    wantVisible, wantIndex);
+    }
+  else if ([command isEqualToString: @"select"])
+    {
+      /* select [--class C] [--text T] [--tag N] [--window W] [--visible] [--index N]
+       * Resolve a stable selector.  A unique (or index-picked) match prints
+       * the row and a stability hint on stderr; an ambiguous match (multiple
+       * candidates, no --index) prints every candidate on stdout plus a
+       * disambiguation hint, and exits 2 so a script can tell "not found"
+       * (1) from "unclear which" (2). */
+      if (!wantClass && !wantText && !wantTag && !wantWindow && !wantVisible)
+        {
+          fprintf(stderr, "drive_ui: select needs --class, --text, --tag, --window or --visible\n");
+          [pool release];
+          return 1;
+        }
+      NSArray *rows = ParseTree(FetchTree(pid));
+      NSArray *matches = MatchingRows(pid, rows, wantClass, wantText, wantTag,
+                                      wantWindow, wantVisible);
+      if ([matches count] == 0)
+        {
+          fprintf(stderr, "drive_ui: select: no match\n");
+          [pool release];
+          return 1;
+        }
+      if ([matches count] > 1 && wantIndex < 0)
+        {
+          fprintf(stderr, "drive_ui: select: AMBIGUOUS: %lu matches; "
+            "disambiguate with --window \"<title>\" or --index <n> (order below):\n",
+            (unsigned long)[matches count]);
+          int i = 0;
+          for (NSArray *f in matches)
+            {
+              fprintf(stderr, "  #%d %s window=\"%s\" stability=%s\n", i++,
+                [[f objectAtIndex: 1] UTF8String],
+                [[f count] > 8 ? [f objectAtIndex: 8] : @"" UTF8String],
+                [[f count] > 9 ? [f objectAtIndex: 9] : @"low" UTF8String]);
+              PrintRow(f);
+            }
+          [pool release];
+          return 2;
+        }
+      NSArray *row = PickRow(matches, wantIndex);
+      PrintRow(row);
+      fprintf(stderr, "drive_ui: select: 1 match stability=%s window=\"%s\"\n",
+        [[row count] > 9 ? [row objectAtIndex: 9] : @"low" UTF8String],
+        [[row count] > 8 ? [row objectAtIndex: 8] : @"" UTF8String]);
     }
   else if ([command isEqualToString: @"get"])
     {
@@ -692,7 +800,8 @@ int main(int argc, const char *argv[])
               return 1;
             }
           NSString *tree = FetchTree(pid);
-          NSArray *row = ResolveRow(ParseTree(tree), wantClass, wantText, wantVisible);
+          NSArray *row = ResolveRow(pid, ParseTree(tree), wantClass, wantText,
+                                    wantTag, wantWindow, wantVisible, wantIndex);
           if (row == nil)
             {
               fprintf(stderr, "drive_ui: no widget matching text '%s'\n", [wantText UTF8String]);
@@ -985,10 +1094,135 @@ int main(int argc, const char *argv[])
         title]);
       if (reply) printf("%s", [reply UTF8String]);
     }
+  else if ([command isEqualToString: @"get_many"])
+    {
+      /* get_many <object_id> ... - read the text of several widgets, one
+       * "<object_id>\t<text>" line per widget, in the order given.  Widgets
+       * may also be named by --text/--class/--window/--index (then one query
+       * set yields the single resolved widget). */
+      NSMutableArray *positionals = [NSMutableArray array];
+      for (NSUInteger i = 1; i < [args count]; i++)
+        {
+          NSString *a = [args objectAtIndex: i];
+          if ([a hasPrefix: @"--"]) { i++; continue; }
+          [positionals addObject: a];
+        }
+      if ([positionals count] == 0 && idArg)
+        [positionals addObject: idArg];
+      if ([positionals count] == 0)
+        {
+          NSArray *r = ResolveRow(pid, ParseTree(FetchTree(pid)), wantClass,
+                                  wantText, wantTag, wantWindow, YES, wantIndex);
+          if (r) [positionals addObject: [r objectAtIndex: 7]];
+        }
+      if ([positionals count] == 0)
+        {
+          fprintf(stderr, "drive_ui: get_many needs at least one <object_id>\n");
+          [pool release];
+          return 1;
+        }
+      for (NSString *objID in positionals)
+        {
+          NSString *reply = SendCommand(pid, [NSString stringWithFormat: @"get\t%@", objID]);
+          NSString *text = reply ? [reply stringByTrimmingCharactersInSet:
+            [NSCharacterSet newlineCharacterSet]] : @"error:no reply";
+          printf("%s\t%s\n", [objID UTF8String], [text UTF8String]);
+        }
+    }
+  else if ([command isEqualToString: @"parents"])
+    {
+      /* parents <object_id> - the widget's view/window ancestry and its class
+       * hierarchy (passthrough to the bundle's read-only `parents` command).
+       * Answers "which window/container is this nested inside?" and "what kind
+       * of class is it really?", neither visible in the flat snapshot. */
+      if (idArg == nil)
+        {
+          NSArray *r = ResolveRow(pid, ParseTree(FetchTree(pid)), wantClass,
+                                  wantText, wantTag, wantWindow, YES, wantIndex);
+          if (r) idArg = [r objectAtIndex: 7];
+        }
+      if (idArg == nil)
+        {
+          fprintf(stderr, "drive_ui: parents needs <object_id>\n");
+          [pool release];
+          return 1;
+        }
+      NSString *reply = SendCommand(pid, [NSString stringWithFormat: @"parents\t%@", idArg]);
+      if (reply) printf("%s", [reply UTF8String]);
+    }
+  else if ([command isEqualToString: @"diagnose"])
+    {
+      /* diagnose [--class C] [--text T] [--tag N] [--window W] [--index N]
+       * Layout diagnostics for one widget/window, as structured lines an agent
+       * can act on.  Checks: zero-size frame, hidden, off-screen window, and
+       * widgets whose screen position lies outside their owning window (the
+       * clipped / scrolled-out case that breaks click-by-center). */
+      NSArray *rows = ParseTree(FetchTree(pid));
+      NSArray *row = idArg ? ResolveRowByID(rows, idArg)
+        : PickRow(MatchingRows(pid, rows, wantClass, wantText, wantTag,
+                               wantWindow, YES), wantIndex);
+      if (row == nil)
+        {
+          fprintf(stderr, "drive_ui: diagnose: no widget matching the selector\n");
+          [pool release];
+          return 1;
+        }
+      NSString *cls = [row objectAtIndex: 1];
+      NSString *text = [row objectAtIndex: 2];
+      NSString *hidden = [row objectAtIndex: 6];
+      NSString *sf = [row objectAtIndex: 5];
+      NSRect f = NSRectFromString(sf);
+      NSRect frame = NSRectFromString([row objectAtIndex: 4]);
+      BOOL issues = NO;
+      printf("diagnose: %s %s\n", [cls UTF8String],
+        [text length] ? [text UTF8String] : "(no title)");
+      if (f.size.width <= 0 || f.size.height <= 0)
+        { printf("  ISSUE zero-size screen_frame %s\n", [sf UTF8String]); issues = YES; }
+      if (frame.size.width <= 0 || frame.size.height <= 0)
+        { printf("  ISSUE zero-size frame %s\n", [[row objectAtIndex: 4] UTF8String]); issues = YES; }
+      if ([hidden isEqualToString: @"1"])
+        { printf("  ISSUE hidden\n"); issues = YES; }
+      if ([sf length] == 0)
+        { printf("  ISSUE no screen_frame (window not visible?)\n"); issues = YES; }
+      /* Window rows: is the window off the main screen?  View rows: is the
+       * widget outside its owning window (clipped/scrolled out)? */
+      BOOL isWindowRow = [cls hasSuffix: @"Window"] && ![cls isEqualToString: @"NSApplication"];
+      NSString *winTitle = ([row count] > 8) ? [row objectAtIndex: 8] : @"";
+      if (isWindowRow)
+        {
+          int sh = [X11Support screenHeight];
+          NSRect scr = NSMakeRect(0, 0, [X11Support screenWidth], sh);
+          NSRect fr = f; fr.origin.y = sh - fr.origin.y - fr.size.height;
+          if (!NSIntersectsRect(fr, scr))
+            { printf("  ISSUE window off-screen\n"); issues = YES; }
+        }
+      else if ([sf length] > 0)
+        {
+          for (NSArray *cand in rows)
+            {
+              if ([cand count] < 6) continue;
+              NSString *ccls = [cand objectAtIndex: 1];
+              if (![ccls hasSuffix: @"Window"] || [ccls isEqualToString: @"NSApplication"]) continue;
+              if (![[cand objectAtIndex: 2] isEqualToString: winTitle]) continue;
+              NSRect wfr = NSRectFromString([cand objectAtIndex: 5]);
+              if (wfr.size.width <= 0 || wfr.size.height <= 0) break;
+              int sh = [X11Support screenHeight];
+              wfr.origin.y = sh - wfr.origin.y - wfr.size.height;
+              NSPoint c = NSMakePoint (NSMidX(f), sh - NSMidY(f));
+              if (!NSMouseInRect (c, wfr, NO))
+                {
+                  printf("  ISSUE outside owning window (clipped/scrolled out) - use scroll_into_view\n");
+                  issues = YES;
+                }
+              break;
+            }
+        }
+      if (!issues) printf("  OK\n");
+    }
   else if ([command isEqualToString: @"menu"])
     {
       /* Read-only: dump the app's main menu tree
-       * (depth\tindex\ttitle\tenabled\has_submenu\tstate\tkey_equiv\
+       * (depth\tindex\ttitle\tenabled\thas_submenu\tstate\tkey_equiv\
        *  modifier_mask\tshortcut). */
       NSString *reply = SendCommand(pid, @"menu");
       if (reply) printf("%s", [reply UTF8String]);
@@ -1090,8 +1324,8 @@ int main(int argc, const char *argv[])
           [pool release];
           return 1;
         }
-      int rc = AssertWidgets(pid, wantClass, wantText, wantTag, wantVisible,
-                             kind, needle);
+      int rc = AssertWidgets(pid, wantClass, wantText, wantTag, wantWindow,
+                             wantVisible, kind, needle);
       [pool release];
       return rc;
     }
@@ -1110,14 +1344,15 @@ int main(int argc, const char *argv[])
           if ([a hasPrefix: @"--"]) { i++; continue; }
           [positionals addObject: a];
         }
-      if (wantText == nil && wantClass == nil && wantTag == nil && !wantVisible)
+      if (wantText == nil && wantClass == nil && wantTag == nil
+          && wantWindow == nil && !wantVisible)
         {
-          fprintf(stderr, "drive_ui: wait_until needs --text, --class, --tag or --visible\n");
+          fprintf(stderr, "drive_ui: wait_until needs --text, --class, --tag, --window or --visible\n");
           [pool release];
           return 1;
         }
-      int rc = WaitUntil(pid, wantClass, wantText, wantTag, wantVisible,
-                         timeout, wantNotExists);
+      int rc = WaitUntil(pid, wantClass, wantText, wantTag, wantWindow,
+                         wantVisible, timeout, wantNotExists);
       [pool release];
       return rc;
     }
@@ -1150,12 +1385,13 @@ int main(int argc, const char *argv[])
 
       if (idArg)
         row = ResolveRowByID(treeRows, idArg);
-      else if (wantText)
-        row = ResolveRow(treeRows, wantClass, wantText, YES);
+      else if (wantText || wantTag || wantWindow)
+        row = ResolveRow(pid, treeRows, wantClass, wantText, wantTag,
+                         wantWindow, YES, wantIndex);
 
       if (row == nil)
         {
-          fprintf(stderr, "drive_ui: %s: widget not found (object_id or --text)\n", [command UTF8String]);
+          fprintf(stderr, "drive_ui: %s: widget not found (object_id or --text/--tag/--window)\n", [command UTF8String]);
           [pool release];
           return 1;
         }
@@ -1285,6 +1521,103 @@ int main(int argc, const char *argv[])
         }
       [X11Support simulateScrollWheel: dir count: amount];
     }
+  else if ([command isEqualToString: @"scroll_into_view"])
+    {
+      /* scroll_into_view <object_id> - bring an instantiated but clipped or
+       * scrolled-out widget into the visible area of its owning window by
+       * wheeling toward it (the X11 pointer is moved over the widget's current
+       * position, so a scrollable container scrolls itself).  This is the
+       * step to run when a click/read resolves a row whose center is outside
+       * the window's frame (the virtualized-row / clipped-target case). */
+      NSString *target = idArg;
+      if (target == nil && (wantText || wantWindow))
+        {
+          NSArray *r0 = ResolveRow(pid, ParseTree(FetchTree(pid)), wantClass,
+                                   wantText, wantTag, wantWindow, YES, wantIndex);
+          target = r0 ? [r0 objectAtIndex: 7] : nil;
+        }
+      if (target == nil)
+        {
+          fprintf(stderr, "drive_ui: scroll_into_view: widget not found\n");
+          [pool release];
+          return 1;
+        }
+      int sh = [X11Support screenHeight];
+      NSRect winRect = NSZeroRect;
+      BOOL haveWin = NO;
+      BOOL visible = NO;
+      for (int attempt = 0; attempt < 8; attempt++)
+        {
+          NSArray *rows = ParseTree(FetchTree(pid));
+          NSArray *row = ResolveRowByID(rows, target);
+          if (row == nil)
+            {
+              fprintf(stderr, "drive_ui: scroll_into_view: widget vanished\n");
+              [pool release];
+              return 1;
+            }
+          if ([row count] < 8) break;
+          NSPoint c = CenterOfRow(row);
+          if (c.x == 0 && c.y == 0) break;
+          /* The owning window's frame: the window row carries the same title in
+           * its text column (field 2) and its window column (field 8). */
+          NSString *winTitle = ([row count] > 8) ? [row objectAtIndex: 8] : @"";
+          if (!haveWin)
+            {
+              for (NSArray *f in rows)
+                {
+                  if ([f count] < 6) continue;
+                  NSString *cls = [f objectAtIndex: 1];
+                  if (![cls hasSuffix: @"Window"]) continue;
+                  if ([cls isEqualToString: @"NSApplication"]) continue;
+                  if (![winTitle length]
+                      || TitleMatches(pid, [f objectAtIndex: 2], winTitle))
+                    {
+                      NSString *sf = [f objectAtIndex: 5];
+                      if ([sf length] > 0)
+                        {
+                          winRect = NSRectFromString(sf);
+                          winRect.origin.y = sh - winRect.origin.y - winRect.size.height;
+                          haveWin = YES;
+                        }
+                      break;
+                    }
+                }
+            }
+          if (haveWin)
+            {
+              if (NSMouseInRect (c, winRect, NO))
+                {
+                  visible = YES;
+                  break;
+                }
+              /* Wheel toward the target: vertical bias, then horizontal. */
+              double dy = c.y - (winRect.origin.y + winRect.size.height / 2.0);
+              double dx = c.x - (winRect.origin.x + winRect.size.width / 2.0);
+              NSString *dir = @"down";
+              if (fabs (dy) >= fabs (dx))
+                dir = (c.y < winRect.origin.y) ? @"up" : @"down";
+              else
+                dir = (c.x < winRect.origin.x) ? @"left" : @"right";
+              [X11Support simulateMouseMoveTo: c];
+              usleep (40000);
+              [X11Support simulateScrollWheel: dir count: 3];
+              usleep (80000);
+            }
+          else
+            {
+              break;
+            }
+        }
+      if (visible)
+        {
+          printf("visible\n");
+        }
+      else
+        {
+          fprintf(stderr, "drive_ui: scroll_into_view: best effort, target may still be clipped\n");
+        }
+    }
   else if ([command isEqualToString: @"drag"])
     {
       /* drag <object_id> <dx> <dy> - press button 1 at the widget's center and
@@ -1364,8 +1697,9 @@ int main(int argc, const char *argv[])
       NSArray *row = nil;
       if (idArg)
         row = ResolveRowByID(treeRows, idArg);
-      else if (wantText)
-        row = ResolveRow(treeRows, wantClass, wantText, YES);
+      else if (wantText || wantTag || wantWindow)
+        row = ResolveRow(pid, treeRows, wantClass, wantText, wantTag,
+                         wantWindow, YES, wantIndex);
       if (row == nil)
         {
           fprintf(stderr, "drive_ui: clear: widget not found\n");
@@ -1450,7 +1784,8 @@ int main(int argc, const char *argv[])
               [pool release];
               return 1;
             }
-          row = ResolveRow(treeRows, wantClass, needle, YES);
+          row = ResolveRow(pid, treeRows, wantClass, needle, wantTag,
+                           wantWindow, YES, wantIndex);
         }
 
       if (row == nil)

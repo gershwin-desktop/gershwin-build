@@ -458,6 +458,12 @@ static void SendKey(Display *d, Window w, KeyCode code,
     return DisplayHeight(d, DefaultScreen(d));
 }
 
++ (int)screenWidth {
+    Display *d = [self display];
+    if (!d) return 0;
+    return DisplayWidth(d, DefaultScreen(d));
+}
+
 + (void)setFocusToPID:(int)pid {
     Display *d = [self display];
     if (!d || pid <= 0) return;

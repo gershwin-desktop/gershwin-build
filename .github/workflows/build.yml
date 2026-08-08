@@ -25,12 +25,13 @@ jobs:
           mem: 4096
           prepare: |
             pkg update
-            pkg install -y git tree squashfs-tools
+            pkg install -y git tree squashfs-tools xorg-vfbserver xdpyinfo fontconfig
           run: |
             set -e
             ./Library/Scripts/bootstrap.sh
             ./Library/Scripts/checkout.sh
             make install
+            make test
             mkdir -p artifacts/FreeBSD/14/amd64
             tar -C / -cJf artifacts/FreeBSD/14/amd64/system.txz /System
             TIMESTAMP=$(date +%y%m%d%H%M%S)
@@ -154,12 +155,13 @@ jobs:
           cpu: 2
           mem: 4096
           prepare: |
-            pkg_add -I git tree
+            pkg_add -I git tree xdpyinfo
           run: |
             set -e
             ./Library/Scripts/bootstrap.sh
             ./Library/Scripts/checkout.sh
             make install
+            make test
             mkdir -p artifacts/OpenBSD/7.8/amd64
             # OpenBSD's base tar has no -J (xz); use -z (gzip), which it supports.
             tar -C / -czf artifacts/OpenBSD/7.8/amd64/system.tgz /System

@@ -212,34 +212,98 @@ pidOfName(NSString *name)
 
 /* Best-effort diagnostic: dump the head of a process stack to stderr.
  * Bounded so a wedged process cannot stall the suite.  gstack is a gdb
- * wrapper on Linux; the BSDs use gdb batch directly. */
+ * wrapper on Linux; the BSDs use gdb batch directly.  OpenBSD restricts
+ * ptrace ('Operation not permitted'), so gdb yields nothing there and we
+ * fall back to ktrace/kdump, and always print the ps wait-channel first -
+ * that works on every platform and shows whether the process is spinning in
+ * userspace (R, wchan '-') or blocked in a syscall. */
 static void
 captureStack(pid_t pid, const char *label)
 {
+  /* Wait-channel/state: works everywhere without ptrace.  A process in state
+   * R with wchan '-' is actively spinning in userspace. */
+  char wcmd[128];
+  snprintf(wcmd, sizeof(wcmd),
+    "ps -o pid,stat,wchan,command -p %d 2>/dev/null", pid);
+  FILE *wfp = popen(wcmd, "r");
+  if (wfp)
+    {
+      char wline[256];
+      fprintf(stderr, "--- %s (pid %d) state ---\n", label, pid);
+      while (fgets(wline, sizeof(wline), wfp))
+        {
+          fprintf(stderr, "%s", wline);
+        }
+      pclose(wfp);
+    }
+
   char cmd[256];
+  const char *tool = "gdb";
   if (system("command -v gstack >/dev/null 2>&1") == 0)
     {
-      snprintf(cmd, sizeof(cmd), "timeout 3 gstack %d 2>/dev/null | head -40",
-        pid);
+      tool = "gstack";
+      snprintf(cmd, sizeof(cmd), "timeout 3 gstack %d | head -40", pid);
+    }
+  else if (system("command -v pstack >/dev/null 2>&1") == 0)
+    {
+      tool = "pstack";
+      snprintf(cmd, sizeof(cmd), "timeout 3 pstack %d | head -40", pid);
     }
   else
     {
+      tool = "gdb";
       snprintf(cmd, sizeof(cmd),
         "timeout 3 gdb -batch -p %d -ex 'thread apply all bt 8' "
-        "-ex detach -ex quit 2>/dev/null | head -40", pid);
+        "-ex detach -ex quit | head -40", pid);
     }
   FILE *fp = popen(cmd, "r");
   if (!fp)
     {
+      fprintf(stderr, "--- %s (pid %d) stack: popen failed ---\n", label, pid);
       return;
     }
   char line[256];
-  fprintf(stderr, "--- %s (pid %d) stack ---\n", label, pid);
-  while (fgets(line, sizeof(line), fp))
+  fprintf(stderr, "--- %s (pid %d) stack (via %s) ---\n", label, pid, tool);
+  int n = 0;
+  while (fgets(line, sizeof(line), fp) && n < 40)
     {
       fprintf(stderr, "%s", line);
+      n++;
+    }
+  if (n == 0)
+    {
+      fprintf(stderr, "    (empty - %s produced no output)\n", tool);
     }
   pclose(fp);
+
+  /* ktrace/kdump (OpenBSD): attach for a second and dump the syscall stream -
+   * shows exactly what a userspace spin is doing (e.g. a repeated
+   * read/poll/gettimeofday).  Works where ptrace is restricted. */
+  if (system("command -v kdump >/dev/null 2>&1") == 0
+      && system("command -v ktrace >/dev/null 2>&1") == 0)
+    {
+      char kcmd[256];
+      snprintf(kcmd, sizeof(kcmd),
+        "ktrace -p %d -f /tmp/uitest_ktrace 2>/dev/null; sleep 1; "
+        "ktrace -c -p %d 2>/dev/null; kdump -f /tmp/uitest_ktrace 2>/dev/null "
+        "| head -60", pid, pid);
+      FILE *kfp = popen(kcmd, "r");
+      if (kfp)
+        {
+          char kline[256];
+          fprintf(stderr, "--- %s (pid %d) ktrace ---\n", label, pid);
+          int kn = 0;
+          while (fgets(kline, sizeof(kline), kfp) && kn < 60)
+            {
+              fprintf(stderr, "%s", kline);
+              kn++;
+            }
+          if (kn == 0)
+            fprintf(stderr, "    (empty - ktrace produced no output)\n");
+          pclose(kfp);
+        }
+      unlink("/tmp/uitest_ktrace");
+    }
 }
 
 typedef struct

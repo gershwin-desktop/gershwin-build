@@ -436,19 +436,11 @@ static void WriteAll(int fd, const char *bytes)
                       [self collectMenuViews: [win contentView] into: menuViews];
                     }
                   [wins release];
-                  /* Dispatch to EVERY matching menu view, not just the first.
-                   * Menu.app can keep a stale global-menu view around after an
-                   * app switch (the previous frontmost app's menu), and if it
-                   * matches the path first it would dispatch to that stale
-                   * view's dead DO client and silently do nothing - the live
-                   * view would never be tried.  Dispatching to all matching
-                   * views makes the live one fire too; for a leaf action like
-                   * About, firing twice is harmless. */
                   BOOL done = NO;
                   for (NSMenuView *mv in menuViews)
                     {
                       if ([self triggerMenuPath: segs inMenu: [mv menu]])
-                        { done = YES; }
+                        { done = YES; break; }
                     }
                   WriteAll(fd, done ? "ok\n" : "error:menu path not found\n");
                 }

@@ -576,7 +576,7 @@ runScript(NSString *abs)
    * but busy desktop on a slow VM would otherwise be flagged as a stuck loop
    * and the whole suite would fail after the first test.  Both stay tunable. */
   double threshold = 95.0;
-  double idle = 50.0;
+  double idle = 95.0;
   int window = 4;
   const char *env;
   if ((env = getenv("UITEST_CPU_WATCH")) != NULL && strcmp(env, "off") == 0)

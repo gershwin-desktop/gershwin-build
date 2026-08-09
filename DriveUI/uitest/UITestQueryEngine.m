@@ -686,7 +686,13 @@ static void SetErr(NSString **err, NSString *m)
 /* Trigger an action on Menu.app's global menu bar (simulates clicking a menu
  * item).  Menu.app runs the global menu for the frontmost app; the UITest target
  * app just needs to be active.  Returns NO if Menu.app isn't running or the
- * item path isn't found. */
+ * item path isn't found.
+ *
+ * Menu.app switches its global bar to the frontmost app asynchronously (it
+ * watches _NET_ACTIVE_WINDOW / focus events), so dispatching immediately after
+ * an activate can target a stale bar - the previous app's menu - and the
+ * action silently does nothing.  First wait for the path's top-level item
+ * (the app name) to actually appear in the bar, then dispatch. */
 - (BOOL)triggerGlobalMenuPath:(NSString *)path error:(NSString **)err
 {
   if (path == nil || [path length] == 0)
@@ -694,6 +700,20 @@ static void SetErr(NSString **err, NSString *m)
   int menuPid = [self menuAppPID];
   if (menuPid <= 0)
     { SetErr(err, @"Menu.app is not running"); return NO; }
+  NSString *top = [[path componentsSeparatedByString: @"/"] objectAtIndex: 0];
+  BOOL barReady = NO;
+  for (int i = 0; i < 40; i++)
+    {
+      if ([self menuBarHasItem: top exists: YES error: nil])
+        { barReady = YES; break; }
+      usleep (250000);
+    }
+  if (!barReady)
+    {
+      SetErr(err, [NSString stringWithFormat:
+        @"global menu bar did not switch to '%@'", top]);
+      return NO;
+    }
   NSArray *argv = [NSArray arrayWithObjects:
     [NSString stringWithFormat: @"--pid=%d", menuPid],
     @"menu_trigger", path, nil];

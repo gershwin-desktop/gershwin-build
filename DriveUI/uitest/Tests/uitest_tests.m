@@ -310,7 +310,14 @@ watchdogMain(void *arg)
       pool = [[NSAutoreleasePool alloc] init];
       int worst = -1;
       double worstAvg = 0.0;
-      for (int i = 0; i < w->watchCount; i++)
+      /* The runner (run_uitest, the last entry) is deliberately EXCLUDED from
+       * the CPU trip: driving a test means spawning drive_ui subprocesses and
+       * polling, so it is legitimately busy - on a slow VM (QEMU BSD CI) it
+       * regularly spikes well past any sane threshold while doing its job, and
+       * tripping on it killed otherwise-fine tests.  It is still health-watched
+       * above (the loop uses watchCount-1 so the runner is skipped there too,
+       * but a vanished runner is caught by the task exit status anyway). */
+      for (int i = 0; i < w->watchCount - 1; i++)
         {
           if (w->watchPids[i] <= 0)
             {
@@ -561,8 +568,15 @@ runScript(NSString *abs)
   launchWorkspaceIfNeeded();
 
   BOOL watch = YES;
-  double threshold = 60.0;
-  double idle = 15.0;
+  /* Per-process CPU, as percent of ONE core (100% = a single core pegged).
+   * A desktop component legitimately uses a core on a slow VM (QEMU BSD CI,
+   * nested X) while rendering or answering DO queries, so the in-test trip is
+   * set high enough to only catch a genuine sustained spin near 100%, and the
+   * between-test settle check uses a higher floor than the old 15% - a healthy
+   * but busy desktop on a slow VM would otherwise be flagged as a stuck loop
+   * and the whole suite would fail after the first test.  Both stay tunable. */
+  double threshold = 95.0;
+  double idle = 50.0;
   int window = 4;
   const char *env;
   if ((env = getenv("UITEST_CPU_WATCH")) != NULL && strcmp(env, "off") == 0)

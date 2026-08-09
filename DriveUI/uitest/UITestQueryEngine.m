@@ -1713,17 +1713,26 @@ static void SetErr(NSString **err, NSString *m)
 
   /* ffmpeg's x11grab is our screen-capture backend (the same approach the
    * Screenshot component takes for X11); it is always present on systems with
-   * libav.  Capture the whole root window so hidden/off-screen state does not
-   * matter. */
+   * libav.  The binary lives at different paths per OS (Linux: /usr/bin or
+   * /bin, the BSDs: /usr/local/bin), so resolve it from PATH plus the usual
+   * locations instead of hardcoding one.  Capture the whole root window so
+   * hidden/off-screen state does not matter. */
   NSString *display = [[NSProcessInfo processInfo] environment][@"DISPLAY"];
   if (display == nil || [display length] == 0) display = @":0";
+  NSString *ffmpeg = @"/usr/bin/ffmpeg";
+  for (NSString *p in [NSArray arrayWithObjects:
+    @"/usr/bin/ffmpeg", @"/bin/ffmpeg", @"/usr/local/bin/ffmpeg", nil])
+    {
+      if ([[NSFileManager defaultManager] isExecutableFileAtPath: p])
+        { ffmpeg = p; break; }
+    }
   NSArray *argv = [NSArray arrayWithObjects:
     @"-f", @"x11grab",
     @"-i", display,
     @"-frames:v", @"1",
     @"-update", @"1",
     @"-y", target, nil];
-  if ([self runTool: @"/bin/ffmpeg" argv: argv error: err] == nil)
+  if ([self runTool: ffmpeg argv: argv error: err] == nil)
     {
       if (err) *err = [NSString stringWithFormat: @"screenshot failed (ffmpeg): %@", *err ?: @""];
       return NO;

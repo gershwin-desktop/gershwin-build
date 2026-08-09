@@ -73,10 +73,12 @@ fi
 # A killed session leaves a gdnc (DO name server) and GNUstepSecure temp state
 # behind, and a fresh gdnc cannot lock the port names - the desktop components
 # then fail with 'Failed to lock names for NSMessagePortNameServer'.  SIGKILL
-# the test user and drop the stale name-server state before bringing the
-# desktop up.
+# the test user and drop only THAT user's stale name-server state
+# (GNUstepSecure<uid>) before bringing the desktop up - other logged-in users'
+# name servers must be left untouched.
 pkill -9 -u "$UITEST_ISOLATED_USER" 2>/dev/null || true
-rm -rf /tmp/GNUstepSecure* 2>/dev/null || true
+_isolated_uid=$(id -u "$UITEST_ISOLATED_USER" 2>/dev/null || echo 0)
+rm -rf "/tmp/GNUstepSecure${_isolated_uid}" 2>/dev/null || true
 sleep 1
 
 if ! xdpyinfo -display "$UITEST_ISOLATED_DISPLAY" >/dev/null 2>&1; then

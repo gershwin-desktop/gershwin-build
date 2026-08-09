@@ -200,6 +200,18 @@ if [ "$UITEST_SESSION" = "isolated" ]; then
     fi
   fi
 
+  # A killed/previous session leaves a gdnc (DO name server) and the test
+  # user's GNUstepSecure temp state behind; a fresh gdnc cannot lock the port
+  # names and the desktop components then fail to find each other's DO
+  # services (Menu shows no app menus).  SIGKILL the test user's stale
+  # processes and drop ONLY this user's name-server state (GNUstepSecure<uid>,
+  # NOT other users' dirs) before bringing the desktop up.  This is the same
+  # cleanup uitest-session.sh performs.
+  pkill -9 -u "$UITEST_ISOLATED_USER" 2>/dev/null || true
+  _isolated_uid=$(id -u "$UITEST_ISOLATED_USER" 2>/dev/null || echo 0)
+  rm -rf "/tmp/GNUstepSecure${_isolated_uid}" 2>/dev/null || true
+  sleep 1
+
   # A fresh virtual display, open to local connections.
   if ! xdpyinfo -display "$UITEST_ISOLATED_DISPLAY" >/dev/null 2>&1; then
     echo "Starting Xvfb on $UITEST_ISOLATED_DISPLAY"
@@ -316,6 +328,10 @@ if [ "$UITEST_SESSION" = "isolated" ]; then
   else
     sudo pkill -9 -u "$UITEST_ISOLATED_USER" 2>/dev/null || true
   fi
+  # Drop the test user's name-server state too, so the next isolated run starts
+  # from a clean gdnc (only this user's dir - other users are untouched).
+  _isolated_uid=$(id -u "$UITEST_ISOLATED_USER" 2>/dev/null || echo 0)
+  rm -rf "/tmp/GNUstepSecure${_isolated_uid}" 2>/dev/null || true
   sleep 1
 fi
 

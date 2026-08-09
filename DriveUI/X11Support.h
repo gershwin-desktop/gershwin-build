@@ -80,4 +80,10 @@
 // present; callers fall back to the socket scan then.
 + (int)pidForAppName:(NSString *)name;
 
+// True if the window identified by `xid` is the one _NET_ACTIVE_WINDOW points
+// at (i.e. the window manager considers it the focused/frontmost window).
+// Used by the UI tests to verify that an activation request actually took
+// effect, instead of assuming the WM honoured it.
++ (BOOL)isWindowActive:(unsigned long)xid;
+
 @end

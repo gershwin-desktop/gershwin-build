@@ -945,6 +945,31 @@ int main(int argc, const char *argv[])
       [pool release];
       return 0;
     }
+  else if ([command isEqualToString: @"xactive"])
+    {
+      /* xactive <title> - print 1 if the first top-level window whose name
+       * contains <title> is the one _NET_ACTIVE_WINDOW points at, else 0.
+       * Lets tests verify an activation actually took effect instead of
+       * assuming the WM honoured the request. */
+      NSMutableArray *positionals = [NSMutableArray array];
+      for (NSUInteger i = 1; i < [args count]; i++)
+        {
+          NSString *a = [args objectAtIndex: i];
+          if ([a hasPrefix: @"--"]) { i++; continue; }
+          [positionals addObject: a];
+        }
+      NSString *title = ([positionals count] > 0) ? [positionals objectAtIndex: 0] : nil;
+      if (title == nil || [title length] == 0)
+        {
+          fprintf(stderr, "drive_ui: xactive needs <title>\n");
+          [pool release];
+          return 1;
+        }
+      unsigned long wid = [X11Support findViewableWindowWithTitle: title];
+      printf("%d\n", (wid != 0 && [X11Support isWindowActive: wid]) ? 1 : 0);
+      [pool release];
+      return 0;
+    }
   else if ([command isEqualToString: @"click_menubar"])
     {
       /* click_menubar <title> - real X11 click on a top-level menu bar item,

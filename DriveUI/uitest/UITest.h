@@ -225,8 +225,10 @@ typedef enum
   NSString *appName_;
   NSString *driveTool_; /* path to the drive_ui binary */
   NSMutableDictionary *localizeCache_; /* english -> localized, per app */
+  BOOL verbose_;     /* emit per-socket resolution diagnostics */
 }
 - (id)initWithDriveTool:(NSString *)toolPath;
+- (void)setVerbose:(BOOL)flag;
 - (BOOL)resolveApplication:(NSString *)name error:(NSString **)err;
 - (BOOL)activate:(NSString **)err;                      /* raise + focus main window */
 - (BOOL)activateXWindow:(NSString *)title error:(NSString **)err;

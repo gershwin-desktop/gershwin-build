@@ -52,8 +52,13 @@ static void DDSMenuNodeFree(DDSMenuNode *n)
       appName_ = nil;
       driveTool_ = [toolPath copy];
       localizeCache_ = [[NSMutableDictionary alloc] init];
+      verbose_ = NO;
     }
   return self;
+}
+- (void)setVerbose:(BOOL)flag
+{
+  verbose_ = flag;
 }
 - (void)dealloc
 {
@@ -246,12 +251,14 @@ static void DDSMenuNodeFree(DDSMenuNode *n)
         {
           NSString *trimmed = [out stringByTrimmingCharactersInSet:
             [NSCharacterSet newlineCharacterSet]];
-          NSLog(@"[resolveApplication] pid %d -> %@", maybePid,
-            ([trimmed length] ? trimmed : @"(empty reply)"));
+          if (verbose_)
+            NSLog(@"[resolveApplication] pid %d -> %@", maybePid,
+              ([trimmed length] ? trimmed : @"(empty reply)"));
         }
       else
         {
-          NSLog(@"[resolveApplication] pid %d -> no reply (DriveUI server not answering)", maybePid);
+          if (verbose_)
+            NSLog(@"[resolveApplication] pid %d -> no reply (DriveUI server not answering)", maybePid);
         }
       if (!out) continue;
       NSString *found = [out stringByTrimmingCharactersInSet:
@@ -341,10 +348,27 @@ static void SetErr(NSString **err, NSString *m)
        * (the xactivate command ignores it and scans the X display). */
       pid_ = [[NSProcessInfo processInfo] processIdentifier];
     }
-  NSString *reply = [self runCollect: [NSArray arrayWithObjects:
-    [NSString stringWithFormat: @"--pid=%d", pid_],
-    @"xactivate", title, nil] error: err];
-  return reply != nil;
+  /* Activate, then VERIFY the window actually became the active one
+   * (_NET_ACTIVE_WINDOW).  The window manager applies activation
+   * asynchronously and can race a newly-mapped window stealing focus back
+   * (e.g. Processes mapping its main window a moment after activate), so a
+   * fire-and-forget send is not a pass.  Retry a few times. */
+  for (int attempt = 0; attempt < 10; attempt++)
+    {
+      [self runCollect: [NSArray arrayWithObjects:
+        [NSString stringWithFormat: @"--pid=%d", pid_],
+        @"xactivate", title, nil] error: nil];
+      NSString *out = [self runCollect: [NSArray arrayWithObjects:
+        [NSString stringWithFormat: @"--pid=%d", pid_],
+        @"xactive", title, nil] error: nil];
+      if (out != nil && [[out stringByTrimmingCharactersInSet:
+        [NSCharacterSet newlineCharacterSet]] isEqualToString: @"1"])
+        return YES;
+      usleep (250000);
+    }
+  SetErr(err, [NSString stringWithFormat:
+    @"activate xwindow '%@' did not become the active window", title]);
+  return NO;
 }
 
 /* Locate the .app bundle for a GNUstep application by searching the standard
@@ -401,6 +425,13 @@ static void SetErr(NSString **err, NSString *m)
   NSTask *task = [[NSTask alloc] init];
   [task setLaunchPath: binary];
   [task setArguments: [NSArray array]];
+  /* The launched app's own stderr (GNUstep startup chatter, theme warnings,
+   * DBus noise) is not part of the test result - discard it so run_uitest's
+   * structured command log stays clean and greppable.  stdout too: apps print
+   * nothing useful for a UI test and it would pollute the harness output. */
+  NSFileHandle *devNull = [NSFileHandle fileHandleWithNullDevice];
+  [task setStandardOutput: devNull];
+  [task setStandardError: devNull];
   @try
     {
       [task launch];

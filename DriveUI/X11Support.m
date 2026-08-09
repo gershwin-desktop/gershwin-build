@@ -308,6 +308,32 @@ static Bool HasGNUstepAttr(Display *d, Window w) {
     return found;
 }
 
+// True if `xid` is the window _NET_ACTIVE_WINDOW points at.
++ (BOOL)isWindowActive:(unsigned long)xid {
+    if (xid == 0) return NO;
+    Display *d = [self display];
+    if (!d) return NO;
+
+    Window root = DefaultRootWindow(d);
+    Atom netActive = XInternAtom(d, "_NET_ACTIVE_WINDOW", True);
+    if (netActive == None) return NO;
+
+    Atom actualType;
+    int actualFormat;
+    unsigned long nitems, bytesAfter;
+    unsigned char *prop = NULL;
+    if (XGetWindowProperty(d, root, netActive, 0, 1, False, XA_WINDOW,
+                           &actualType, &actualFormat, &nitems, &bytesAfter,
+                           &prop) != Success || !prop)
+      {
+        if (prop) XFree(prop);
+        return NO;
+      }
+    Window active = *(Window *)prop;
+    XFree(prop);
+    return active == (Window)xid;
+}
+
 // Resolve the GNUstep content window under root point (x,y) and the point in that
 // window's coordinates. Descends from root with XTranslateCoordinates to the
 // deepest window under the point, remembering the deepest one bearing

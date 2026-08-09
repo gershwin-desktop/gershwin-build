@@ -27,11 +27,14 @@ int main(int argc, const char *argv[])
 
   NSString *driveTool = @"/System/Library/Tools/drive_ui";
   NSString *script = nil;
+  BOOL verbose = NO;
   for (int i = 1; i < argc; i++)
     {
       NSString *a = [NSString stringWithUTF8String: argv[i]];
       if ([a isEqualToString: @"--drive-tool"] && i + 1 < argc)
         driveTool = [NSString stringWithUTF8String: argv[++i]];
+      else if ([a isEqualToString: @"--verbose"] || [a isEqualToString: @"-v"])
+        verbose = YES;
       else if ([a hasSuffix: @".uitest"] || script == nil)
         script = a;
     }
@@ -39,7 +42,7 @@ int main(int argc, const char *argv[])
   if (!script)
     {
       fprintf(stderr,
-        "Usage: run_uitest [--drive-tool /path/to/drive_ui] script.uitest\n");
+        "Usage: run_uitest [--drive-tool /path/to/drive_ui] [--verbose] script.uitest\n");
       [pool release];
       return DDSParseError;
     }
@@ -56,6 +59,7 @@ int main(int argc, const char *argv[])
 
   UITestQueryEngine *engine = [[[UITestQueryEngine alloc] initWithDriveTool: driveTool]
     autorelease];
+  [engine setVerbose: verbose];
   UITestExecutor *exec = [[[UITestExecutor alloc] initWithProgram: prog engine: engine]
     autorelease];
   struct timeval t0, t1;
@@ -65,12 +69,16 @@ int main(int argc, const char *argv[])
   double totalMs = (t1.tv_sec - t0.tv_sec) * 1000.0
     + (t1.tv_usec - t0.tv_usec) / 1000.0;
 
-  /* Always print the timed command log so slow commands (e.g. a dialog-driven
-   * select menu) are visible when tuning script speed. */
-  if ([[exec log] length] > 0)
+  /* The detailed per-command log is debug output: show it on failure (so the
+   * failing step is visible) or with --verbose.  A passing run prints just the
+   * one-line result so the harness output stays scannable. */
+  if ([[exec log] length] > 0
+      && (rc != 0 || verbose))
     fprintf(stderr, "%s\n", [[exec log] UTF8String]);
-  fprintf(stderr, "[uitest] total %.0f ms (%s)\n", totalMs,
-    rc == 0 ? "ok" : "failed");
+
+  /* Machine- and human-readable result: one line, greppable for PASS/FAIL. */
+  printf("UITEST %s %s (%.0f ms)\n", rc == 0 ? "PASS" : "FAIL",
+    [script UTF8String], totalMs);
   [pool release];
   return rc;
 }

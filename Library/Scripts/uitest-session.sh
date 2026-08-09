@@ -91,7 +91,7 @@ if ! xdpyinfo -display "$UITEST_ISOLATED_DISPLAY" >/dev/null 2>&1; then
     start_bg Xephyr "$UITEST_ISOLATED_DISPLAY" -screen 800x600 -ac -nolisten tcp -noreset
   else
     echo "Starting Xvfb on $UITEST_ISOLATED_DISPLAY"
-    start_bg Xvfb "$UITEST_ISOLATED_DISPLAY" -screen 0 1920x1080x24 -nolisten tcp -ac
+    start_bg Xvfb "$UITEST_ISOLATED_DISPLAY" -screen 0 800x600x24 -nolisten tcp -ac
   fi
   i=0
   while [ "$i" -lt 30 ]; do

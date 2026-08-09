@@ -627,10 +627,11 @@ runScript(NSString *abs)
       watchdog.windowSize = window;
       /* Make the watch visible in the log once, so a silent pid-resolution
        * failure (e.g. pgrep missing from PATH) cannot go unnoticed. */
-      NSLog(@"CPU watchdog on: Menu=%d Workspace=%d WindowManager=%d "
-        "runner=%d (threshold %.0f%%, window %d s, health watch on)",
-        watchdog.watchPids[0], watchdog.watchPids[1], watchdog.watchPids[2],
-        watchdog.watchPids[3], threshold, window);
+      if (getenv("UITEST_VERBOSE") != NULL)
+        NSLog(@"CPU watchdog on: Menu=%d Workspace=%d WindowManager=%d "
+          "runner=%d (threshold %.0f%%, window %d s, health watch on)",
+          watchdog.watchPids[0], watchdog.watchPids[1], watchdog.watchPids[2],
+          watchdog.watchPids[3], threshold, window);
       pthread_create(&thr, NULL, watchdogMain, &watchdog);
     }
 
@@ -657,10 +658,28 @@ runScript(NSString *abs)
     }
   else if (status != 0)
     {
+      /* run_uitest prints one clean "UITEST FAIL <script> (<ms>)" line on
+       * stdout, plus the detailed command log on stderr.  Show the structured
+       * log (per-command SUCCESS/failure + the result line) but drop the
+       * timestamped noise the launched apps spew on stderr - that is not part
+       * of the test result. */
       NSData *data = [NSData dataWithContentsOfFile: errPath];
       NSString *msg = [[NSString alloc] initWithData:data
         encoding:NSUTF8StringEncoding];
-      NSLog(@"%s failed (exit %d): %@", [abs UTF8String], status, msg);
+      if (msg)
+        {
+          for (NSString *line in [msg componentsSeparatedByString: @"\n"])
+            {
+              if ([line length] == 0) continue;
+              if ([line hasPrefix: @"2026-"]
+                  || [line hasPrefix: @"Loading "]
+                  || [line hasPrefix: @" INFO:"]
+                  || [line hasPrefix: @"Loaded '"])
+                continue;
+              fprintf(stderr, "    %s\n", [line UTF8String]);
+            }
+        }
+      NSLog(@"%s failed (exit %d)", [abs UTF8String], status);
       [msg release];
     }
   [errOut release];
@@ -815,6 +834,7 @@ main()
   PASS([groups count] > 0, "found at least one UITest script");
 
   int failures = 0;
+  int run = 0;
   for (NSString *group in
     [[groups allKeys] sortedArrayUsingSelector:@selector(compare:)])
     {
@@ -832,6 +852,7 @@ main()
         {
           BOOL ok = runScript(abs);
           PASS(ok, "%s", [displayPath(abs) UTF8String]);
+          run++;
           if (!ok)
             {
               failures++;
@@ -841,6 +862,10 @@ main()
     }
 
   RELEASE(pool);
+  /* One clean, greppable summary line: the harness exit status gates 'make
+   * test' / CI, and this is the at-a-glance PASS/FAIL count for humans. */
+  fprintf(stderr, "UITEST SUMMARY: %d run, %d failed, %d passed\n",
+    run, failures, run - failures);
   /* A failed uitest must fail the process: 'make test' in gershwin-developer
    * (and any CI wrapper) gates on the exit status. */
   return failures > 0 ? 1 : 0;

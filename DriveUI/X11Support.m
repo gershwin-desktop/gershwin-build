@@ -265,6 +265,14 @@ static Bool HasGNUstepAttr(Display *d, Window w) {
 // 2s-per-wedged-socket timeout; it is also immune to stale socket files.
 // Returns 0 when the app has no window (a background daemon) or no EWMH WM is
 // present - the caller falls back to the socket scan then.
+//
+// A window can outlive its owner by a moment (the app quit, the WM has not
+// un-mapped it yet) and a quit app stays a zombie until reaped, which
+// kill(pid, 0) still counts as alive - so a matching window is only accepted
+// when its pid is alive AND its DriveUI socket still exists.  That socket is
+// exactly what run_uitest drives, and it is removed on a clean terminate and
+// unlinked by the resolver when the owner is gone, so a just-quit app (or a
+// zombie) fails here and the caller really relaunches it.
 + (int)pidForAppName:(NSString *)name {
     if (name == nil || [name length] == 0) return 0;
     Display *d = [self display];
@@ -288,7 +296,13 @@ static Bool HasGNUstepAttr(Display *d, Window w) {
         const char *cls = (hint.res_class != NULL) ? hint.res_class : "";
         if (strcmp(cls, [name UTF8String]) != 0) continue;
         int pid = [[info objectForKey: @"pid"] intValue];
-        if (pid > 0) { found = pid; break; }
+        if (pid <= 0) continue;
+        if (kill(pid, 0) != 0) continue;              /* dead */
+        char sock[64];
+        snprintf(sock, sizeof(sock), "/tmp/driveui.%d.sock", pid);
+        if (access(sock, F_OK) != 0) continue;        /* zombie / no DriveUI */
+        found = pid;
+        break;
     }
     if (children) XFree(children);
     return found;

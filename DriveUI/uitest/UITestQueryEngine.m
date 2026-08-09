@@ -1630,7 +1630,16 @@ static void SetErr(NSString **err, NSString *m)
     {
       BOOL present = [self doesWidgetExist: role title: title contains: nil
                                   inWindow: windowTitle error: nil];
-      if (notExists ? !present : present) return YES;
+      if (notExists ? !present : present)
+        {
+          /* The condition matched, but a freshly opened window (e.g. an About
+           * box, a modal) is still animating in and its first snapshot can be
+           * a transient frame; also a human watching the nested session only
+           * sees the window if it stays up a moment.  Let it settle for a
+           * minimum beat before reporting success. */
+          usleep (200000);
+          return YES;
+        }
       usleep (100000);
     }
   SetErr(err, @"timed out waiting for condition");

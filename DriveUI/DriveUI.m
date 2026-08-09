@@ -138,6 +138,19 @@
        * main thread and crash in libobjc's load_messages_insert). */
       NSString *pn = [[NSProcessInfo processInfo] processName];
       _processName = ([pn length] > 0) ? [pn copy] : @"unknown";
+      /* A cleanly-exiting app must remove its socket, otherwise the next
+       * run of the same pid (or the resolveApplication scan) would find a
+       * stale file whose server is gone.  The serverLoop also unlinks at
+       * startup, but that only covers a restart, not a terminate. */
+      [[NSNotificationCenter defaultCenter]
+        addObserverForName: NSApplicationWillTerminateNotification
+                    object: nil queue: nil
+                usingBlock: ^(NSNotification *n) {
+                  pid_t p = [[NSProcessInfo processInfo] processIdentifier];
+                  NSString *sp = [NSString stringWithFormat:
+                    @"/tmp/driveui.%d.sock", p];
+                  unlink([sp UTF8String]);
+                }];
       [NSThread detachNewThreadSelector: @selector(serverLoop:)
                                toTarget: self
                              withObject: nil];

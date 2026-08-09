@@ -7,6 +7,7 @@
 #import "X11Support.h"
 #import <X11/Xlib.h>
 #import <X11/Xatom.h>
+#import <X11/Xutil.h>
 #import <X11/keysym.h>
 #import <X11/XKBlib.h>
 #include <unistd.h>
@@ -257,6 +258,42 @@ static Bool HasGNUstepAttr(Display *d, Window w) {
     return has;
 }
 
+// Resolve an app name to its process id from the app's own X11 windows
+// (reverse of a /tmp/driveui.*.sock scan): GNUstep sets WM_CLASS res_class to
+// the process name and _NET_WM_PID to the process id on every content window.
+// No subprocess is spawned and no socket is probed, so this cannot hit a
+// 2s-per-wedged-socket timeout; it is also immune to stale socket files.
+// Returns 0 when the app has no window (a background daemon) or no EWMH WM is
+// present - the caller falls back to the socket scan then.
++ (int)pidForAppName:(NSString *)name {
+    if (name == nil || [name length] == 0) return 0;
+    Display *d = [self display];
+    if (!d) return 0;
+
+    Window root = DefaultRootWindow(d);
+    Window parent, *children = NULL;
+    unsigned int nchildren = 0;
+    if (!XQueryTree(d, root, &root, &parent, &children, &nchildren))
+        return 0;
+
+    int found = 0;
+    for (unsigned int i = 0; i < nchildren; i++) {
+        NSDictionary *info = [self windowInfo:children[i]];
+        if (![self isAppWindow:info]) continue;
+
+        // WM_CLASS res_class is the process name; read it directly rather
+        // than going through windowInfo:, which does not expose it.
+        XClassHint hint;
+        if (!XGetClassHint(d, children[i], &hint)) continue;
+        const char *cls = (hint.res_class != NULL) ? hint.res_class : "";
+        if (strcmp(cls, [name UTF8String]) != 0) continue;
+        int pid = [[info objectForKey: @"pid"] intValue];
+        if (pid > 0) { found = pid; break; }
+    }
+    if (children) XFree(children);
+    return found;
+}
+
 // Resolve the GNUstep content window under root point (x,y) and the point in that
 // window's coordinates. Descends from root with XTranslateCoordinates to the
 // deepest window under the point, remembering the deepest one bearing
@@ -297,8 +334,7 @@ static Window FindGNUstepWindowBelow(Display *d, Window w) {
     return found;
 }
 
-// The GNUstep window that should receive keyboard input.  Keys are injected as
-// XSendEvent events addressed to this window (not XTEST): the target app is
+// The GNUstep window that should receive keyboard input.  Keys are injected as// XSendEvent events addressed to this window (not XTEST): the target app is
 // usually not the X input-focus owner in a window-managed desktop, and XTEST
 // keys would go to whatever holds focus.  X delivers the event to the client
 // owning the addressed window, and GNUstep then routes it to its own key window

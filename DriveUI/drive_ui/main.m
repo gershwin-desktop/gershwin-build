@@ -816,31 +816,61 @@ int main(int argc, const char *argv[])
           target = [row objectAtIndex: 7];
         }
       NSString *reply = SendCommand(pid, [NSString stringWithFormat: @"get\t%@", target]);
-      if (reply) printf("%s", [reply UTF8String]);
+      if (!reply)
+        {
+          [pool release];
+          return 1;
+        }
+      printf("%s", [reply UTF8String]);
     }
   else if ([command isEqualToString: @"app"])
     {
-      /* Read-only: return the app name the snapshot belongs to. */
+      /* Read-only: return the app name the snapshot belongs to.  The reply
+       * must be non-empty: run_uitest uses this to map a pid to an app, and
+       * an empty reply means the app's DriveUI server did not answer (or was
+       * still starting up), which must look like a failure (exit != 0) - not
+       * a success with no output, which the resolver would log as a puzzling
+       * '(empty reply)'. */
       NSString *reply = SendCommand(pid, @"app");
-      if (reply) printf("%s", [reply UTF8String]);
+      if (!reply || [reply length] == 0)
+        {
+          [pool release];
+          return 1;
+        }
+      printf("%s", [reply UTF8String]);
     }
   else if ([command isEqualToString: @"windows"])
     {
       /* Read-only: titles of visible windows (cheap alternative to the tree). */
       NSString *reply = SendCommand(pid, @"windows");
-      if (reply) printf("%s", [reply UTF8String]);
+      if (!reply)
+        {
+          [pool release];
+          return 1;
+        }
+      printf("%s", [reply UTF8String]);
     }
   else if ([command isEqualToString: @"menubar"])
     {
       /* Read-only: top-level menu bar items as title\tx\ty (screen centres). */
       NSString *reply = SendCommand(pid, @"menubar");
-      if (reply) printf("%s", [reply UTF8String]);
+      if (!reply)
+        {
+          [pool release];
+          return 1;
+        }
+      printf("%s", [reply UTF8String]);
     }
   else if ([command isEqualToString: @"menu_tree"])
     {
       /* Debug: dump the menu bar menus' titles. */
       NSString *reply = SendCommand(pid, @"menu_tree");
-      if (reply) printf("%s", [reply UTF8String]);
+      if (!reply)
+        {
+          [pool release];
+          return 1;
+        }
+      printf("%s", [reply UTF8String]);
     }
   else if ([command isEqualToString: @"xwindow"])
     {

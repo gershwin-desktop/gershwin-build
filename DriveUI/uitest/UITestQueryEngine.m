@@ -16,6 +16,7 @@
  */
 
 #import "UITest.h"
+#import "../X11Support.h"
 #import <signal.h>
 #import <unistd.h>
 
@@ -187,12 +188,30 @@ static void DDSMenuNodeFree(DDSMenuNode *n)
     [NSString stringWithFormat: @"--pid=%d", pid_], subcommand, nil];
 }
 
-/* Resolve an app name to a pid by scanning the /tmp/driveui.<pid>.sock
- * sockets (each answers the read-only `app` command).  Sockets whose pid is no
- * longer alive are skipped without connecting, so a pile of stale sockets from
- * long-dead apps cannot make activation take seconds per socket. */
+/* Resolve an app name to a pid.  Fast path: GNUstep sets WM_CLASS res_class
+ * (= the process name) and _NET_WM_PID on every window, so the pid is read
+ * straight off the app's X11 window - no subprocess, no socket probe, and
+ * immune to stale /tmp/driveui.*.sock files.  Fallback: scan the sockets and
+ * ask each live one for its `app` name; sockets whose pid is no longer alive
+ * are unlinked on the spot (a crashed app cannot clean up after itself) and
+ * skipped, so a pile of stale sockets from long-dead apps cannot make
+ * activation take seconds per socket.  A live app that does not answer is
+ * skipped, never a hard failure - the caller retries. */
 - (BOOL)resolveApplication:(NSString *)name error:(NSString **)err
 {
+  if (name == nil || [name length] == 0)
+    {
+      if (err) *err = @"resolve application needs a name";
+      return NO;
+    }
+  int xpid = [X11Support pidForAppName: name];
+  if (xpid > 0)
+    {
+      pid_ = xpid;
+      appName_ = [name copy];
+      return YES;
+    }
+
   NSString *tmp = @"/tmp";
   NSArray *entries = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:
     tmp error: nil];
@@ -204,7 +223,13 @@ static void DDSMenuNodeFree(DDSMenuNode *n)
         [e length] - 8 - [@".sock" length])];
       int maybePid = [pidStr intValue];
       if (maybePid <= 0) continue;
-      if (kill(maybePid, 0) != 0) continue;  /* stale socket, owner gone */
+      if (kill(maybePid, 0) != 0)
+        {
+          /* The owning process is gone but left its socket file behind.
+           * Remove it so the next resolution does not even look at it. */
+          unlink([[tmp stringByAppendingPathComponent: e] UTF8String]);
+          continue;
+        }
       /* The name query is fast for a healthy app (~25 ms); use the short
        * timeout so a wedged leftover app from an earlier test costs at most
        * 2 s instead of stalling every app resolution for 20 s. */
@@ -213,7 +238,10 @@ static void DDSMenuNodeFree(DDSMenuNode *n)
         timeout: kToolTimeoutFast error: nil];
       /* Diagnostic: log every socket we probed so a failed activation shows
        * exactly which apps were alive and which answered, instead of just
-       * 'application X not running'. */
+       * 'application X not running'.  An app that is alive but does not
+       * answer is transient (still starting up, or wedged); it is skipped,
+       * never a hard failure - the caller retries and the app either comes
+       * up or the scan moves on to the next candidate. */
       if (out != nil)
         {
           NSString *trimmed = [out stringByTrimmingCharactersInSet:
@@ -632,26 +660,7 @@ static void SetErr(NSString **err, NSString *m)
 {
   if (path == nil || [path length] == 0)
     { SetErr(err, @"select global menu needs a path (use \"Top/Sub\")"); return NO; }
-  int menuPid = 0;
-  NSString *menuName = @"Menu";
-  NSString *tmp = @"/tmp";
-  NSArray *entries = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:
-    tmp error: nil];
-  for (NSString *e in entries)
-    {
-      if (![e hasPrefix: @"driveui."] || ![e hasSuffix: @".sock"]) continue;
-      NSString *pidStr = [e substringWithRange: NSMakeRange(8,
-        [e length] - 8 - [@".sock" length])];
-      int maybePid = [pidStr intValue];
-      if (maybePid <= 0) continue;
-      if (kill(maybePid, 0) != 0) continue;
-      NSString *a = [self runCollect: [NSArray arrayWithObjects:
-        [NSString stringWithFormat: @"--pid=%d", maybePid], @"app", nil] error: nil];
-      NSString *found = a ? [a stringByTrimmingCharactersInSet:
-        [NSCharacterSet newlineCharacterSet]] : @"";
-      if ([found isEqualToString: menuName])
-        { menuPid = maybePid; break; }
-    }
+  int menuPid = [self menuAppPID];
   if (menuPid <= 0)
     { SetErr(err, @"Menu.app is not running"); return NO; }
   NSArray *argv = [NSArray arrayWithObjects:
@@ -998,9 +1007,13 @@ static void SetErr(NSString **err, NSString *m)
   return YES;
 }
 
-/* Resolve Menu.app's pid by scanning the DriveUI sockets. */
+/* Resolve Menu.app's pid via its X11 window first (fast, no socket probing),
+ * falling back to scanning the DriveUI sockets. */
 - (int)menuAppPID
 {
+  int xpid = [X11Support pidForAppName: @"Menu"];
+  if (xpid > 0) return xpid;
+
   NSString *tmp = @"/tmp";
   NSArray *entries = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:
     tmp error: nil];

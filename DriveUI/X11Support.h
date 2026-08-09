@@ -71,4 +71,13 @@
 // window (ICCCM/EWMH filter used by the whole-display scans).
 + (BOOL)isAppWindow:(NSDictionary *)info;
 
+// Resolve an application name to its process id the other way round from a
+// socket scan: GNUstep sets WM_CLASS res_class to the process name and
+// _NET_WM_PID to the process id on every window, so an app is found by
+// reading those off its window - no /tmp/driveui.*.sock probing, no
+// subprocess spawn, no 2s-per-wedged-socket stall.  Returns 0 when the app
+// has no window (a background daemon) or no EWMH-compliant window manager is
+// present; callers fall back to the socket scan then.
++ (int)pidForAppName:(NSString *)name;
+
 @end

@@ -1,0 +1,108 @@
+diff --git a/Source/NSRunLoop.m b/Source/NSRunLoop.m
+index f3c4bb249..6ebb7813e 100644
+--- a/Source/NSRunLoop.m
++++ b/Source/NSRunLoop.m
+@@ -65,6 +65,9 @@
+ #  define RL_INTEGRATE_DISPATCH 1
+ #  import "GSDispatch.h"
+ #endif
++#if GS_USE_LIBDISPATCH_RUNLOOP && defined(__linux__)
++#include <sys/eventfd.h>
++#endif
+ 
+ 
+ NSRunLoopMode const NSDefaultRunLoopMode = @"NSDefaultRunLoopMode";
+@@ -389,11 +392,22 @@ static inline BOOL timerInvalidated(NSTimer *t)
+ #ifdef RL_INTEGRATE_DISPATCH
+ 
+ #pragma clang diagnostic push
+-/* We have no declarations for libdispatch private functions, so we ignore
+- * warnings here, knowing that we are using an undocumented feature which
+- * may go away in later releases (in which case we will use another library)
++/* libdispatch's private runloop integration functions have no public
++ * declaration (only <dispatch/dispatch.h> is included), so the compiler would
++ * assume an int return and truncate the 64-bit value on platforms where the
++ * handle is a packed pipe pair.  Declare the exact signatures ourselves:
++ * Linux (swift-corelibs) returns a plain eventfd descriptor, other unixes
++ * (Apple's libdispatch on FreeBSD and NextBSD) return
++ * (readfd << 32) | writefd.
+  */
+-#pragma clang diagnostic ignored "-Wimplicit-function-declaration"
++#if defined(__linux__)
++#  define GSDispatchRunLoopHandle int
++#else
++#  define GSDispatchRunLoopHandle uint64_t
++#endif
++extern GSDispatchRunLoopHandle _dispatch_get_main_queue_handle_4CF(void);
++extern void _dispatch_main_queue_callback_4CF(void *_Null_unspecified msg);
++#pragma clang diagnostic pop
+ 
+ @interface GSMainQueueDrainer : NSObject <RunLoopEvents>
+ + (void*) mainQueueFileDescriptor;
+@@ -405,7 +419,21 @@ static inline BOOL timerInvalidated(NSTimer *t)
+ #if HAVE_DISPATCH_GET_MAIN_QUEUE_HANDLE_NP
+   return (void*)(uintptr_t)dispatch_get_main_queue_handle_np();
+ #elif HAVE__DISPATCH_GET_MAIN_QUEUE_HANDLE_4CF
+-  return (void*)(uintptr_t)_dispatch_get_main_queue_handle_4CF();
++  GSDispatchRunLoopHandle handle = _dispatch_get_main_queue_handle_4CF();
++  /* Promote to unsigned 64-bit before shifting: on Linux the handle is a
++   * plain eventfd int and an in-place >> 32 on a 32-bit value is UB/masked.
++   */
++  uint64_t packed = (uint64_t)(uintptr_t)handle;
++  /* Apple's libdispatch encodes its run loop wakeup as a pipe pair packed
++   * into the main queue handle: (readfd << 32) | writefd.  The run loop has
++   * to watch the READ end (high 32 bits); other libdispatches (e.g. the
++   * swift-corelibs build on Linux) return a single readable descriptor.
++   */
++  if (packed >> 32 != 0)
++    {
++      return (void*)(uintptr_t)(packed >> 32);
++    }
++  return (void*)(uintptr_t)packed;
+ #else
+ #error libdispatch missing main queue handle function
+ #endif
+@@ -419,11 +447,30 @@ static inline BOOL timerInvalidated(NSTimer *t)
+ #if HAVE_DISPATCH_MAIN_QUEUE_DRAIN_NP
+   dispatch_main_queue_drain_np();
+ #elif HAVE__DISPATCH_MAIN_QUEUE_CALLBACK_4CF
++  /* Some libdispatches (e.g. the Apple build used on FreeBSD and NextBSD)
++   * signal their run loop wakeup through a non-blocking pipe, and do not
++   * consume the wakeup bytes themselves.  We have to read them off the
++   * pipe ourselves, otherwise the run loop would fire continuously.
++   */
++  if ((((uint64_t)(uintptr_t)_dispatch_get_main_queue_handle_4CF()) >> 32) != 0)
++    {
++      int fd = (int)(intptr_t)data;
++      char buf[64];
++      ssize_t n;
++      do
++        {
++          n = read(fd, buf, sizeof(buf));
++        }
++      while (n > 0 || (n < 0 && errno == EINTR));
++    }
+ #if defined(__linux__)
+-  uint64_t value;
+-  int fd = (int)(intptr_t)data;
+-  int n = eventfd_read(fd, &value);
+-  (void) n;
++  else
++    {
++      uint64_t value;
++      int fd = (int)(intptr_t)data;
++      int n = eventfd_read(fd, &value);
++      (void) n;
++    }
+ #endif
+   _dispatch_main_queue_callback_4CF(NULL);
+ #else
+@@ -432,8 +479,6 @@ static inline BOOL timerInvalidated(NSTimer *t)
+ }
+ @end
+ 
+-#pragma clang diagnostic pop
+-
+ #endif
+ 
+ @interface NSRunLoop (Private)

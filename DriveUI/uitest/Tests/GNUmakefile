@@ -2,6 +2,7 @@
 #
 
 include $(GNUSTEP_MAKEFILES)/common.make
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 
 GNUSTEP_OBJ_DIR=./obj
 
@@ -38,3 +39,4 @@ after-clean::
 	rm -f core core.* *.core \
 	test_*.out test_*.err \
 	tests.log tests.sum oldtests.log oldtests.sum
+

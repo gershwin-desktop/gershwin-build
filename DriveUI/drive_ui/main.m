@@ -239,8 +239,8 @@ static NSArray *ResolveRowByID(NSArray *rows, NSString *objID)
   if (!objID) return nil;
   for (NSArray *f in rows)
     {
-      if ([f count] < 8) continue;
-      if ([[f objectAtIndex: 7] isEqualToString: objID]) return f;
+      if ([f count] < 9) continue;
+      if ([[f objectAtIndex: 8] isEqualToString: objID]) return f;
     }
   return nil;
 }
@@ -400,7 +400,7 @@ static BOOL RowMatches(int pid, NSArray *f, NSString *wantClass, NSString *wText
   if (wantClass && [cls rangeOfString: wantClass options: NSCaseInsensitiveSearch].location == NSNotFound) return NO;
   if (wantTag && [tagStr intValue] != [wantTag intValue]) return NO;
   if (wText && TitleMatches(pid, text, wText) == NO) return NO;
-  if (wantWindow && TitleMatches(pid, [f count] > 8 ? [f objectAtIndex: 8] : @"", wantWindow) == NO) return NO;
+  if (wantWindow && TitleMatches(pid, [f count] > 9 ? [f objectAtIndex: 9] : @"", wantWindow) == NO) return NO;
   return YES;
 }
 
@@ -488,7 +488,7 @@ static int AssertWidgets(int pid, NSString *wantClass, NSString *wantText,
           return 1;
         }
       NSString *reply = SendCommand(pid, [NSString stringWithFormat: @"props\t%@",
-        [match objectAtIndex: 7]]);
+        [match objectAtIndex: 8]]);
       BOOL enabled = NO, checked = NO;
       if (reply)
         {
@@ -710,17 +710,17 @@ int main(int argc, const char *argv[])
       /* --json: emit the tree as a JSON array of objects (agent-friendly and
        * unambiguous - quotes/newlines in titles are escaped instead of breaking
        * the tab layout).  Each object: depth class text tag frame screen_frame
-       * hidden object_id window stability. */
+       * hidden enabled object_id window stability. */
       if ([args containsObject: @"--json"])
         {
-          static NSString *const keys[10] = { @"depth", @"class", @"text",
-            @"tag", @"frame", @"screen_frame", @"hidden", @"object_id",
-            @"window", @"stability" };
+          static NSString *const keys[11] = { @"depth", @"class", @"text",
+            @"tag", @"frame", @"screen_frame", @"hidden", @"enabled",
+            @"object_id", @"window", @"stability" };
           NSMutableArray *objs = [NSMutableArray array];
           for (NSArray *f in ParseTree(tree))
             {
               NSMutableDictionary *d = [NSMutableDictionary dictionary];
-              for (int i = 0; i < 10 && i < (int)[f count]; i++)
+              for (int i = 0; i < 11 && i < (int)[f count]; i++)
                 [d setObject: [f objectAtIndex: i] forKey: keys[i]];
               [objs addObject: d];
             }
@@ -780,8 +780,8 @@ int main(int argc, const char *argv[])
             {
               fprintf(stderr, "  #%d %s window=\"%s\" stability=%s\n", i++,
                 [[f objectAtIndex: 1] UTF8String],
-                [[f count] > 8 ? [f objectAtIndex: 8] : @"" UTF8String],
-                [[f count] > 9 ? [f objectAtIndex: 9] : @"low" UTF8String]);
+                [[f count] > 9 ? [f objectAtIndex: 9] : @"" UTF8String],
+                [[f count] > 10 ? [f objectAtIndex: 10] : @"low" UTF8String]);
               PrintRow(f);
             }
           [pool release];
@@ -790,8 +790,8 @@ int main(int argc, const char *argv[])
       NSArray *row = PickRow(matches, wantIndex);
       PrintRow(row);
       fprintf(stderr, "drive_ui: select: 1 match stability=%s window=\"%s\"\n",
-        [[row count] > 9 ? [row objectAtIndex: 9] : @"low" UTF8String],
-        [[row count] > 8 ? [row objectAtIndex: 8] : @"" UTF8String]);
+        [[row count] > 10 ? [row objectAtIndex: 10] : @"low" UTF8String],
+        [[row count] > 9 ? [row objectAtIndex: 9] : @"" UTF8String]);
     }
   else if ([command isEqualToString: @"get"])
     {
@@ -814,7 +814,7 @@ int main(int argc, const char *argv[])
               [pool release];
               return 1;
             }
-          target = [row objectAtIndex: 7];
+          target = [row objectAtIndex: 8];
         }
       NSString *reply = SendCommand(pid, [NSString stringWithFormat: @"get\t%@", target]);
       if (!reply)
@@ -1195,7 +1195,7 @@ int main(int argc, const char *argv[])
         {
           NSArray *r = ResolveRow(pid, ParseTree(FetchTree(pid)), wantClass,
                                   wantText, wantTag, wantWindow, YES, wantIndex);
-          if (r) [positionals addObject: [r objectAtIndex: 7]];
+          if (r) [positionals addObject: [r objectAtIndex: 8]];
         }
       if ([positionals count] == 0)
         {
@@ -1221,7 +1221,7 @@ int main(int argc, const char *argv[])
         {
           NSArray *r = ResolveRow(pid, ParseTree(FetchTree(pid)), wantClass,
                                   wantText, wantTag, wantWindow, YES, wantIndex);
-          if (r) idArg = [r objectAtIndex: 7];
+          if (r) idArg = [r objectAtIndex: 8];
         }
       if (idArg == nil)
         {
@@ -1269,7 +1269,7 @@ int main(int argc, const char *argv[])
       /* Window rows: is the window off the main screen?  View rows: is the
        * widget outside its owning window (clipped/scrolled out)? */
       BOOL isWindowRow = [cls hasSuffix: @"Window"] && ![cls isEqualToString: @"NSApplication"];
-      NSString *winTitle = ([row count] > 8) ? [row objectAtIndex: 8] : @"";
+      NSString *winTitle = ([row count] > 9) ? [row objectAtIndex: 9] : @"";
       if (isWindowRow)
         {
           int sh = [X11Support screenHeight];
@@ -1616,7 +1616,7 @@ int main(int argc, const char *argv[])
         {
           NSArray *r0 = ResolveRow(pid, ParseTree(FetchTree(pid)), wantClass,
                                    wantText, wantTag, wantWindow, YES, wantIndex);
-          target = r0 ? [r0 objectAtIndex: 7] : nil;
+          target = r0 ? [r0 objectAtIndex: 8] : nil;
         }
       if (target == nil)
         {
@@ -1642,8 +1642,8 @@ int main(int argc, const char *argv[])
           NSPoint c = CenterOfRow(row);
           if (c.x == 0 && c.y == 0) break;
           /* The owning window's frame: the window row carries the same title in
-           * its text column (field 2) and its window column (field 8). */
-          NSString *winTitle = ([row count] > 8) ? [row objectAtIndex: 8] : @"";
+           * its text column (field 2) and its window column (field 9). */
+          NSString *winTitle = ([row count] > 9) ? [row objectAtIndex: 9] : @"";
           if (!haveWin)
             {
               for (NSArray *f in rows)

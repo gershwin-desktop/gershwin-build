@@ -32,12 +32,13 @@
  *   menu                      -> main menu tree: depth\tindex\ttitle\tenabled\thas_submenu
  *   menu_invoke <i> <j> ...   -> perform the menu item's action at that index path
  *
- * Snapshot fields (tab-separated): depth, class, text, tag, frame,
- * screen_frame, hidden, object_id, window, stability.  `text` is the displayed
- * (localized) title/stringValue, so drive_ui can find widgets by their
- * on-screen label and then act on the id via X11 at the reported screen_frame.
- * `window` is the title of the owning window (empty for the app row), which
- * scopes a search when several windows carry the same label.  `stability` is a
+ *  Snapshot fields (tab-separated): depth, class, text, tag, frame,
+ *  screen_frame, hidden, enabled, object_id, window, stability.  `text` is the
+ *  displayed (localized) title/stringValue, so drive_ui can find widgets by
+ *  their on-screen label and then act on the id via X11 at the reported
+ *  screen_frame.  `window` is the title of the owning window (empty for the app
+ *  row), which scopes a search when several windows carry the same label.
+ *  `stability` is a
  * per-node handle-quality grade used to pick selectors that survive restarts:
  *   high   - the app row, or a view with a non-zero tag (an authored
  *            identifier the app chose, not derived from display text)
@@ -1090,6 +1091,7 @@ static NSString *ShortcutForItem(NSMenuItem *item)
             @"",
             @"",
             @"0",
+            @"1",
             [self objectIDForObject: NSApp],
             @"",
             @"high",
@@ -1115,6 +1117,7 @@ static NSString *ShortcutForItem(NSMenuItem *item)
                           NSStringFromRect([win frame]),
                           screenFrame,
                           [NSNumber numberWithInt: [win isVisible] ? 0 : 1],
+                          @"1",
                           [self objectIDForObject: win],
                           [win title] ?: @"",
                           @"medium",
@@ -1173,6 +1176,16 @@ static NSString *ShortcutForItem(NSMenuItem *item)
 
       int tag = [view isKindOfClass: [NSControl class]] ? (int)[(NSControl *)view tag] : 0;
       NSString *ownTitle = ownWin ? ([ownWin title] ?: @"") : @"";
+
+      /* Always emit the enabled state: 1 when the control is enabled (or it is
+       * not a control), 0 when a disabled control.  A subview of a hidden
+       * window is not interactable either, but that is the `hidden` column's
+       * job; enabled stays the object's own flag so scripts can distinguish a
+       * greyed-out item from a merely off-screen one. */
+      BOOL viewEnabled = YES;
+      if ([view respondsToSelector: @selector(isEnabled)]) {
+        viewEnabled = [(id)view isEnabled];
+      }
       [items addObject: [NSArray arrayWithObjects:
                           [NSNumber numberWithInt: depth],
                           NSStringFromClass([view class]),
@@ -1181,6 +1194,7 @@ static NSString *ShortcutForItem(NSMenuItem *item)
                           NSStringFromRect([view frame]),
                           screenFrame,
                           [NSNumber numberWithInt: viewHidden ? 1 : 0],
+                          [NSNumber numberWithInt: viewEnabled ? 1 : 0],
                           [self objectIDForObject: view],
                           ownTitle,
                           (tag != 0) ? @"high" : @"low",
@@ -1254,6 +1268,7 @@ static NSString *ShortcutForItem(NSMenuItem *item)
                               NSStringFromRect([tv rectOfRow: r]),
                               screenFrame,
                               [NSNumber numberWithInt: isVisible ? 0 : 1],
+                              @"1",
                               [NSString stringWithFormat: @"row:%p:%ld", tv, (long)r],
                               w ? ([w title] ?: @"") : @"",
                               @"low",
@@ -1289,7 +1304,8 @@ static NSString *ShortcutForItem(NSMenuItem *item)
       NSString *sc = ShortcutForItem(item);
       if ([sc length] > 0)
         title = [NSString stringWithFormat: @"%@  [%@]", title, sc];
-      [out appendFormat: @"%@%@\n", [item isSeparatorItem] ? @"-" : @"", title];
+      [out appendFormat: @"%@%@  enabled=%d\n",
+        [item isSeparatorItem] ? @"-" : @"", title, [item isEnabled] ? 1 : 0];
       if ([item submenu] != nil)
         [self appendMenuTree: [item submenu] depth: depth + 1 into: out];
     }

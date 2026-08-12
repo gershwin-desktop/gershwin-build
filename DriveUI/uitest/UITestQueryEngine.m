@@ -500,11 +500,11 @@ static void SetErr(NSString **err, NSString *m)
   for (NSString *line in [tree componentsSeparatedByString: @"\n"])
     {
       NSArray *f = [line componentsSeparatedByString: @"\t"];
-      if ([f count] < 8) continue;
+      if ([f count] < 9) continue;
       if ([[f objectAtIndex: 6] isEqualToString: @"1"]) continue;   /* hidden */
       NSString *sf = [f objectAtIndex: 5];
       if ([sf length] == 0) continue;                              /* no frame to click */
-      target = [f objectAtIndex: 7];
+      target = [f objectAtIndex: 8];
       break;
     }
   /* Nothing clickable to raise - the app is already our PID target, so this is
@@ -544,13 +544,13 @@ static void SetErr(NSString **err, NSString *m)
   for (NSString *line in [out componentsSeparatedByString: @"\n"])
     {
       NSArray *f = [line componentsSeparatedByString: @"\t"];
-      if ([f count] < 8) continue;
+      if ([f count] < 9) continue;
       if ([[f objectAtIndex: 6] isEqualToString: @"1"]) continue;
       if (![self class: [f objectAtIndex: 1] matchesRoleClass: cls]) continue;
       if (title && ![self title: [f objectAtIndex: 2] matches: title]) continue;
-      if (windowTitle && [f count] > 8
-          && ![self title: [f objectAtIndex: 8] matches: windowTitle]) continue;
-      return [f objectAtIndex: 7];
+      if (windowTitle && [f count] > 9
+          && ![self title: [f objectAtIndex: 9] matches: windowTitle]) continue;
+      return [f objectAtIndex: 8];
     }
   SetErr(err, [NSString stringWithFormat: @"no widget matching role/title"]);
   return nil;
@@ -577,7 +577,7 @@ static void SetErr(NSString **err, NSString *m)
   for (NSString *line in [out componentsSeparatedByString: @"\n"])
     {
       NSArray *f = [line componentsSeparatedByString: @"\t"];
-      if ([f count] < 8) continue;
+      if ([f count] < 9) continue;
       if ([[f objectAtIndex: 6] isEqualToString: @"1"]) continue;   /* hidden */
       if (![self class: [f objectAtIndex: 1] matchesRoleClass: @"NSWindow"]) continue;
       if (title && ![self title: [f objectAtIndex: 2] matches: title]) continue;
@@ -1178,14 +1178,14 @@ static void SetErr(NSString **err, NSString *m)
   for (NSString *line in [tree componentsSeparatedByString: @"\n"])
     {
       NSArray *f = [line componentsSeparatedByString: @"\t"];
-      if ([f count] < 8) continue;
+      if ([f count] < 9) continue;
       if (![[f objectAtIndex: 1] isEqualToString: @"CompletionField"]) continue;
       NSRect r = NSRectFromString([f objectAtIndex: 5]);
       if (r.size.width <= 0) continue;
       if ([f count] > 6 && [[f objectAtIndex: 6] isEqualToString: @"1"]) continue;
       /* Prefer the top-most CompletionField (the Run dialog sits at the top). */
       if (r.origin.y > bestY)
-        { bestY = (CGFloat)r.origin.y; fieldID = [f objectAtIndex: 7]; }
+        { bestY = (CGFloat)r.origin.y; fieldID = [f objectAtIndex: 8]; }
     }
   if (fieldID == nil)
     return nil;
@@ -1548,15 +1548,15 @@ static void SetErr(NSString **err, NSString *m)
   for (NSString *line in [tree componentsSeparatedByString: @"\n"])
     {
       NSArray *f = [line componentsSeparatedByString: @"\t"];
-      if ([f count] < 8) continue;
+      if ([f count] < 9) continue;
       NSString *lineCls = [f objectAtIndex: 1];
       NSString *lineText = [f objectAtIndex: 2];
       NSString *hidden = [f objectAtIndex: 6];
       if ([hidden isEqualToString: @"1"]) continue;
       if (![self class: lineCls matchesRoleClass: cls]) continue;
       if (title && ![self title: lineText matches: title]) continue;
-      if (windowTitle && [f count] > 8
-          && ![self title: [f objectAtIndex: 8] matches: windowTitle]) continue;
+      if (windowTitle && [f count] > 9
+          && ![self title: [f objectAtIndex: 9] matches: windowTitle]) continue;
       if (needle)
         {
           if ([self title: lineText matches: needle] == NO) continue;

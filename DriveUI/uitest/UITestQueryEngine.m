@@ -1329,15 +1329,29 @@ static void SetErr(NSString **err, NSString *m)
           && [self performMenuItemWithShortcut: expected error: err])
         return YES;
     }
-  /* Global X11 key action - no target app required. */
-  /* combo like "Enter", "Escape", "Ctrl+C", "Cmd+Q". */
+  /* Global X11 key action - no target app required.
+   *
+   * A modifier chord that is NOT a resolvable menu shortcut must be sent as
+   * REAL key events (via xdotool) so global key grabs fire - synthesized
+   * XSendEvent chords (the old `chord` path) never trigger a passive grab, so
+   * Menu.app's global Cmd+Space would silently do nothing.  Single keys
+   * (Enter, Escape, ...) still use drive_ui's in-process `press` (XSendEvent),
+   * which is sufficient for keys that are delivered to the focused window. */
+  NSString *sub = (parts.count > 1) ? @"physical_key" : @"press";
   NSMutableArray *args = [NSMutableArray arrayWithArray:
-    [self argvForSubcommand: (parts.count > 1) ? @"chord" : @"press"]];
+    [self argvForSubcommand: sub]];
   if (parts.count > 1)
     {
+      /* Build xdotool's "mods+key" form, e.g. "alt+space". */
+      NSMutableString *combo = [NSMutableString string];
       for (NSUInteger i = 0; i < [parts count] - 1; i++)
-        [args addObject: [self normalizeMod: [parts objectAtIndex: i]]];
-      [args addObject: [self normalizeKey: [parts lastObject]]];
+        {
+          if ([combo length] > 0) [combo appendString: @"+"];
+          [combo appendString: [self normalizeMod: [parts objectAtIndex: i]]];
+        }
+      if ([combo length] > 0) [combo appendString: @"+"];
+      [combo appendString: [self normalizeKey: [parts lastObject]]];
+      [args addObject: combo];
     }
   else
     [args addObject: [parts lastObject]];

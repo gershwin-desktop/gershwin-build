@@ -636,6 +636,7 @@ static void Usage(void)
   printf("  drive_ui [--pid N] assert [--class C] [--text T] [--tag N] [--window W] [--visible] <exists|not-exists|enabled|checked>\n");
   printf("  drive_ui [--pid N] assert contains --text <needle>\n");
   printf("  drive_ui [--pid N] wait_until [--class C] [--text T] [--tag N] [--window W] [--visible] [--timeout N] [--not-exists]\n");
+  printf("  drive_ui [--pid N] font <object_id>           (read-only: resolved fontName/bold of a widget)\n");
   printf("  drive_ui [--pid N] capture [<path>]           (screenshot root window to PNG)\n");
   printf("  drive_ui [--pid N] press                     (press Return)\n");
   printf("  drive_ui [--pid N] chord <mods> <key>        (e.g. chord control c)\n");
@@ -1131,6 +1132,27 @@ int main(int argc, const char *argv[])
         }
       NSString *reply = SendCommand(pid, [NSString stringWithFormat: @"props\t%@", idArg]);
       if (reply) printf("%s", [reply UTF8String]);
+    }
+  else if ([command isEqualToString: @"font"])
+    {
+      /* Read-only: report the resolved font of a widget
+       * (fontName=... pointSize=... familyName=... bold=0|1). */
+      if (idArg == nil)
+        {
+          fprintf(stderr, "drive_ui: font needs <object_id>\n");
+          [pool release];
+          return 1;
+        }
+      NSString *reply = SendCommand(pid, [NSString stringWithFormat: @"font\t%@", idArg]);
+      if (reply) printf("%s", [reply UTF8String]);
+      else printf("(no reply)\n");
+    }
+  else if ([command isEqualToString: @"nsfont"])
+    {
+      /* Read-only: how NSFont factories resolve in the target process. */
+      NSString *reply = SendCommand(pid, @"nsfont");
+      if (reply) printf("%s", [reply UTF8String]);
+      else printf("(no reply)\n");
     }
   else if ([command isEqualToString: @"close_window"])
     {
@@ -1805,6 +1827,77 @@ int main(int argc, const char *argv[])
         }
       [X11Support setFocusToPID: pid];
       [X11Support simulateChordWithModifiers: mods key: key];
+    }
+  else if ([command isEqualToString: @"physical_key"])
+    {
+      /* physical_key <keysym>+  e.g. "physical_key alt+space" or
+       * "physical_key alt+Return".  Sends REAL key events through the X
+       * server (via the xdotool utility) so global key grabs fire - which
+       * synthetic XSendEvent chords cannot do.  xdotool is a system tool; we
+       * do not link XTest ourselves. */
+      NSMutableArray *positionals = [NSMutableArray array];
+      for (NSUInteger i = 1; i < [args count]; i++)
+        {
+          NSString *a = [args objectAtIndex: i];
+          if ([a hasPrefix: @"--"]) { i++; continue; }
+          [positionals addObject: a];
+        }
+      NSString *combo = ([positionals count] > 0) ? [positionals objectAtIndex: 0] : nil;
+      if (combo == nil)
+        {
+          fprintf(stderr, "drive_ui: physical_key needs a key combo (e.g. alt+space)\n");
+          [pool release];
+          return 1;
+        }
+      /* Ensure the target app is focused so the key events land where a user
+       * would have the keyboard. */
+      if (pid > 0)
+        [X11Support setFocusToPID: pid];
+      /* Press the modifiers and the key as separate xdotool invocations:
+       * a single "alt+space" command can be delivered with a modifier state
+       * the passive grab does not match, while a real user's keydown/keyup
+       * sequence always fires the grab. */
+      NSArray *comboParts = [combo componentsSeparatedByString: @"+"];
+      NSUInteger nParts = [comboParts count];
+      NSString *keyPart = (nParts > 0) ? [comboParts lastObject] : combo;
+      NSMutableArray *modParts = [NSMutableArray array];
+      for (NSUInteger i = 0; i + 1 < nParts; i++)
+        [modParts addObject: [comboParts objectAtIndex: i]];
+      if (nParts < 1) { [modParts removeAllObjects]; keyPart = combo; }
+      @try
+        {
+          NSTask *down = [[NSTask alloc] init];
+          [down setLaunchPath: @"/bin/xdotool"];
+          NSMutableArray *downArgs = [NSMutableArray arrayWithObject: @"keydown"];
+          if ([modParts count] > 0) [downArgs addObject: [modParts componentsJoinedByString: @"+"]];
+          [down setArguments: downArgs];
+          [down launch];
+          [down waitUntilExit];
+          [down release];
+
+          NSTask *tap = [[NSTask alloc] init];
+          [tap setLaunchPath: @"/bin/xdotool"];
+          [tap setArguments: [NSArray arrayWithObjects: @"key", keyPart, nil]];
+          [tap launch];
+          [tap waitUntilExit];
+          [tap release];
+
+          NSTask *up = [[NSTask alloc] init];
+          [up setLaunchPath: @"/bin/xdotool"];
+          NSMutableArray *upArgs = [NSMutableArray arrayWithObject: @"keyup"];
+          if ([modParts count] > 0) [upArgs addObject: [modParts componentsJoinedByString: @"+"]];
+          [up setArguments: upArgs];
+          [up launch];
+          [up waitUntilExit];
+          [up release];
+        }
+      @catch (NSException *e)
+        {
+          fprintf(stderr, "drive_ui: physical_key failed (xdotool): %s\n",
+                  [[e reason] UTF8String]);
+          [pool release];
+          return 1;
+        }
     }
   else if ([command isEqualToString: @"type"])
     {

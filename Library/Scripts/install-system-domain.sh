@@ -169,6 +169,11 @@ build_corelibs() {
   export GNUSTEP_INSTALLATION_DOMAIN="SYSTEM"
 
   cd "$REPOS_DIR/libs-base"
+
+  # Patch libs-base (64-bit _4CF main-queue handle fix for Apple libdispatch).
+  echo "Patching libs-base..."
+  patch.sh libs-base
+
   if [ "$NEXTBSD" -eq 1 ]; then
     # NextBSD ships libdns_sd (the mDNSResponder DNS-SD client) in
     # /usr/lib/system, which is on binaries' runtime RUNPATH but is NOT a

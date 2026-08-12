@@ -558,6 +558,96 @@ static void WriteAll(int fd, const char *bytes)
                 enabled, state];
               WriteAll(fd, [reply UTF8String]);
             }
+          else if ([cmd isEqualToString: @"font"])
+            {
+              /* font <object_id> - report the widget's current font, read-only:
+               * fontName=<name> pointSize=<size> familyName=<name> bold=<0|1>.
+               * Lets diagnostics verify which resolved font a label/button really
+               * draws with (see the Eau theme font substitution, where a
+               * "regular" request can silently resolve to the fontconfig bold
+               * face of the same family). */
+              NSString *objID = ([parts count] > 1) ? [parts objectAtIndex: 1] : nil;
+              id obj = [self objectForID: objID];
+              if (obj == nil)
+                {
+                  WriteAll(fd, "error:no object\n");
+                }
+              else if (![obj respondsToSelector: @selector(font)])
+                {
+                  WriteAll(fd, "error:no font\n");
+                }
+              else
+                {
+                  NSFont *f = nil;
+                  @try {
+                    f = [obj performSelector: @selector(font)];
+                  } @catch (NSException *e) { }
+                  if (f == nil)
+                    {
+                      WriteAll(fd, "nil\n");
+                    }
+                  else
+                    {
+                      NSString *name = [f fontName];
+                      NSString *fam = [f familyName];
+                      CGFloat size = [f pointSize];
+                      BOOL bold = NO;
+                      @try {
+                        NSFontDescriptor *d = [f fontDescriptor];
+                        if ([d respondsToSelector: @selector(symbolicTraits)])
+                          {
+                            NSFontTraitMask traits =
+                              (NSFontTraitMask)[d symbolicTraits];
+                            bold = ((traits & NSFontBoldTrait) != 0);
+                          }
+                      } @catch (NSException *e) { }
+                      NSString *reply = [NSString stringWithFormat:
+                        @"fontName=%@ pointSize=%.1f familyName=%@ bold=%d\n",
+                        name ?: @"nil", size, fam ?: @"nil", bold];
+                      WriteAll(fd, [reply UTF8String]);
+                    }
+                }
+            }
+          else if ([cmd isEqualToString: @"nsfont"])
+            {
+              /* nsfont - report how NSFont class font-factory methods resolve
+               * IN THIS PROCESS (i.e. with every installed swizzle active):
+               * systemFontOfSize:0|11|13  boldSystemFontOfSize:13 and
+               * fontWithName:@"Inter-Regular".  Lets us tell whether a theme
+               * font substitution maps a "regular" request to the bold face. */
+              NSMutableString *reply = [NSMutableString string];
+              NSFont *f;
+              f = [NSFont systemFontOfSize: 0];
+              [reply appendFormat: @"system0=%@\n", f ? [f fontName] : @"nil"];
+              f = [NSFont systemFontOfSize: 11];
+              [reply appendFormat: @"system11=%@ family=%@\n",
+                f ? [f fontName] : @"nil", f ? [f familyName] : @"nil"];
+              f = [NSFont systemFontOfSize: 13];
+              [reply appendFormat: @"system13=%@ family=%@\n",
+                f ? [f fontName] : @"nil", f ? [f familyName] : @"nil"];
+              NSFont *b = [NSFont boldSystemFontOfSize: 13];
+              [reply appendFormat: @"bold13=%@ family=%@\n",
+                b ? [b fontName] : @"nil", b ? [b familyName] : @"nil"];
+              NSFont *r11 = [NSFont systemFontOfSize: 11];
+              NSFont *rt = [NSFont fontWithDescriptor: [r11 fontDescriptor] size: 11];
+              [reply appendFormat: @"roundtrip(system11 desc)->%@\n",
+                rt ? [rt fontName] : @"nil"];
+              NSFont *rb = [NSFont boldSystemFontOfSize: 13];
+              NSFont *rtb = [NSFont fontWithDescriptor: [rb fontDescriptor] size: 13];
+              [reply appendFormat: @"roundtrip(bold13 desc)->%@\n",
+                rtb ? [rtb fontName] : @"nil"];
+              NSArray *ff = [[NSFontManager sharedFontManager] availableFontFamilies];
+              BOOL has = NO;
+              for (NSString *nm in ff)
+                if ([nm isEqualToString: [r11 familyName]]) has = YES;
+              [reply appendFormat: @"families=%lu system11familyAvailable=%d\n",
+                (unsigned long)[ff count], has];
+              f = [NSFont fontWithName: @"Inter-Regular" size: 11];
+              [reply appendFormat: @"InterRegular11=%@\n", f ? [f fontName] : @"nil"];
+              f = [NSFont fontWithName: @"Inter-Bold" size: 13];
+              [reply appendFormat: @"InterBold13=%@\n", f ? [f fontName] : @"nil"];
+              WriteAll(fd, [reply UTF8String]);
+            }
           else if ([cmd isEqualToString: @"parents"])
             {
               /* parents <object_id> - the widget's ancestry, one line per

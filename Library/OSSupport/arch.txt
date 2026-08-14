@@ -37,3 +37,4 @@ autoconf
 automake
 libtool
 ffmpeg
+sqlite

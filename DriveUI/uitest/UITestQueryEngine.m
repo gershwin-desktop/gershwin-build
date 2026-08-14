@@ -1458,6 +1458,10 @@ static void SetErr(NSString **err, NSString *m)
   if ([k isEqualToString: @"down"]) return @"Down";
   if ([k isEqualToString: @"left"]) return @"Left";
   if ([k isEqualToString: @"right"]) return @"Right";
+  /* xdotool's keysym for the space bar is lowercase "space"; the capitalized
+   * spelling is rejected ("No such key name 'Space'") and the key is silently
+   * dropped, so a `press "Cmd+Space"` would never fire the global grab. */
+  if ([k isEqualToString: @"space"]) return @"space";
   if (k.length == 1)
     {
       unichar c = [k characterAtIndex: 0];

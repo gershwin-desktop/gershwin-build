@@ -40,3 +40,4 @@ libtool
 libvncserver
 freerdp
 ffmpeg
+sqlite3

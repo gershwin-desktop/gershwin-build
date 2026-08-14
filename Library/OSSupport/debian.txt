@@ -66,3 +66,4 @@ libavfilter-dev
 libavdevice-dev
 libao-dev
 libsndfile1-dev
+libsqlite3-dev

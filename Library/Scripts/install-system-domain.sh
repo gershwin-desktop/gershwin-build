@@ -332,6 +332,10 @@ case "$TARGET" in
     ;;
   workspace)
     ensure_gnustep_env
+    # gershwin-workspace's MDIndexing prefPane links the PreferencePanes
+    # framework (installed by gershwin-systempreferences); build that first
+    # so <PreferencePanes/PreferencePanes.h> resolves.
+    build_systempreferences
     build_workspace
     ;;
   systempreferences)
@@ -376,8 +380,10 @@ case "$TARGET" in
     ;;
   all)
     build_corelibs
-    build_workspace
+    # workspace's MDIndexing prefPane depends on the PreferencePanes
+    # framework, so systempreferences must be built first.
     build_systempreferences
+    build_workspace
     build_eau_theme
     build_terminal
     build_textedit

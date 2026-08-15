@@ -591,10 +591,10 @@ static NSString *CommandName(UITestCommandType t)
 {
   NSRect ra = NSRectFromString (a);
   NSRect rb = NSRectFromString (b);
-  return (fabs (NSMinX (ra) - NSMinX (rb)) <= 2.0
-          && fabs (NSMinY (ra) - NSMinY (rb)) <= 2.0
-          && fabs (NSWidth (ra) - NSWidth (rb)) <= 2.0
-          && fabs (NSHeight (ra) - NSHeight (rb)) <= 2.0);
+  return (fabs (NSMinX (ra) - NSMinX (rb)) <= 0.0
+&& fabs (NSMinY (ra) - NSMinY (rb)) <= 0.0
+         && fabs (NSWidth (ra) - NSWidth (rb)) <= 0.0
+         && fabs (NSHeight (ra) - NSHeight (rb)) <= 0.0);
 }
 
 - (BOOL)assertFrameConstantForWindow:(NSString *)title error:(NSString **)err

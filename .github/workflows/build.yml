@@ -46,6 +46,17 @@ jobs:
           path: artifacts/FreeBSD/14/amd64
           if-no-files-found: error
 
+      # The JUnit report (build/test-results/junit.xml) is written by the
+      # uitest harness and copied out of the VM by run-uitests.sh. Upload it
+      # so CI consumers can download it without scraping the log.
+      - name: Upload UI test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-freebsd-14-amd64
+          path: build/test-results/junit.xml
+          if-no-files-found: warn
+
   build-archlinux-x86_64:
     name: Arch x86_64
     runs-on: ubuntu-latest
@@ -71,6 +82,16 @@ jobs:
 
       - name: Run UI tests
         run: sh Library/Scripts/run-uitests-debug.sh
+
+      # The JUnit report (build/test-results/junit.xml) is written by the
+      # uitest harness and copied out of the isolated session by run-uitests.sh.
+      - name: Upload UI test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-archlinux-x86_64
+          path: build/test-results/junit.xml
+          if-no-files-found: warn
 
       - name: Package
         run: |
@@ -116,6 +137,16 @@ jobs:
 
       - name: Run UI tests
         run: sh Library/Scripts/run-uitests-debug.sh
+
+      # The JUnit report (build/test-results/junit.xml) is written by the
+      # uitest harness and copied out of the isolated session by run-uitests.sh.
+      - name: Upload UI test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-debian-x86_64
+          path: build/test-results/junit.xml
+          if-no-files-found: warn
 
       - name: Package
         run: |
@@ -178,3 +209,14 @@ jobs:
           name: gershwin-openbsd-78-amd64
           path: artifacts/OpenBSD/7.8/amd64
           if-no-files-found: error
+
+      # The JUnit report (build/test-results/junit.xml) is written by the
+      # uitest harness and copied out of the VM by run-uitests.sh. Upload it
+      # so CI consumers can download it without scraping the log.
+      - name: Upload UI test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-openbsd-78-amd64
+          path: build/test-results/junit.xml
+          if-no-files-found: warn

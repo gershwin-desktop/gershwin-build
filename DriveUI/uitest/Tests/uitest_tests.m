@@ -39,6 +39,11 @@
 #import <sys/wait.h>
 #import "Testing.h"
 #import <Foundation/Foundation.h>
+/* The run_uitest exit-code contract (DDSParseError/DDSRuntimeError/...): the
+ * harness maps a script's exit status to a JUnit failure vs error below. */
+#import "../UITest.h"
+/* The JUnit result model and serializer (spec reporter architecture). */
+#import "../JUnitReporter.h"
 
 static NSString *runner = @"/System/Library/Tools/run_uitest";
 static NSString *sourcesRoot = @"/Developer/Library/Sources";
@@ -618,11 +623,14 @@ checkSettled(double idleThreshold)
 }
 
 static BOOL
-runScript(NSString *abs)
+runScript(NSString *abs, GSUITestResult *result)
 {
   if (!fileExists(abs))
     {
       NSLog(@"UITest script missing: %@", abs);
+      [result setStatus: GSUITestStatusError];
+      [result setMessage: @"script missing"];
+      [result setDetails: abs];
       return NO;
     }
 
@@ -630,6 +638,8 @@ runScript(NSString *abs)
    * a desktop crash earlier in the suite does not cascade into this one.  The
    * watchdog then fails the test if it exits while the script runs. */
   launchWorkspaceIfNeeded();
+
+  double t0 = nowSeconds();
 
   BOOL watch = YES;
   /* Per-process CPU, as percent of ONE core (100% = a single core pegged).
@@ -674,6 +684,9 @@ runScript(NSString *abs)
     {
       [task release];
       NSLog(@"%s: cannot create stderr temp file", [abs UTF8String]);
+      [result setStatus: GSUITestStatusError];
+      [result setMessage: @"cannot create stderr temp file"];
+      [result setDetails: abs];
       return NO;
     }
   NSString *errPath = [NSString stringWithUTF8String:tmpl];
@@ -722,10 +735,17 @@ runScript(NSString *abs)
 
   int status = [task terminationStatus];
   BOOL aborted = watchdog.triggered;
+  double elapsed = nowSeconds() - t0;
+  [result setDuration: elapsed];
 
   if (aborted)
     {
+      /* A CPU/health trip is an infrastructure failure (a wedged desktop
+       * component or a crash), not a test assertion - report it as an error. */
       NSLog(@"%s: %s", [abs UTF8String], watchdog.reason);
+      [result setStatus: GSUITestStatusError];
+      [result setMessage: [NSString stringWithUTF8String: watchdog.reason]];
+      [result setDetails: [NSString stringWithUTF8String: watchdog.reason]];
       /* A CPU trip can still be diagnosed by its stack; a health trip has no
        * process left to attach to. */
       if (!watchdog.healthTrip)
@@ -740,10 +760,13 @@ runScript(NSString *abs)
        * stdout, plus the detailed command log on stderr.  Show the structured
        * log (per-command SUCCESS/failure + the result line) but drop the
        * timestamped noise the launched apps spew on stderr - that is not part
-       * of the test result. */
+       * of the test result. The filtered lines double as the JUnit failure
+       * details; the last one is the short message. */
       NSData *data = [NSData dataWithContentsOfFile: errPath];
       NSString *msg = [[NSString alloc] initWithData:data
         encoding:NSUTF8StringEncoding];
+      NSMutableString *details = [NSMutableString string];
+      NSString *lastLine = nil;
       if (msg)
         {
           for (NSString *line in [msg componentsSeparatedByString: @"\n"])
@@ -755,8 +778,19 @@ runScript(NSString *abs)
                   || [line hasPrefix: @"Loaded '"])
                 continue;
               fprintf(stderr, "    %s\n", [line UTF8String]);
+              if ([details length] > 0) [details appendString: @"\n"];
+              [details appendString: line];
+              lastLine = line;
             }
         }
+      [result setMessage: lastLine
+        ?: [NSString stringWithFormat: @"script failed (exit %d)", status]];
+      [result setDetails: details];
+      /* A parse or runtime error means the script could not be carried out
+       * (a harness/test-definition problem); a timeout or a failed assertion
+       * means it ran but the expected UI condition did not hold. */
+      [result setStatus: (status == DDSParseError || status == DDSRuntimeError)
+        ? GSUITestStatusError : GSUITestStatusFailed];
       NSLog(@"%s failed (exit %d)", [abs UTF8String], status);
       [msg release];
     }
@@ -775,8 +809,18 @@ runScript(NSString *abs)
       if (!checkSettled(idle))
         {
           NSLog(@"%s: desktop did not settle after the script", [abs UTF8String]);
+          [result setStatus: GSUITestStatusError];
+          [result setMessage: @"desktop did not settle after the script"];
+          [result setDetails: @"a desktop component stayed pegged with no test driving it"];
           return NO;
         }
+    }
+  /* Only a genuinely clean run (no watchdog trip, no failure exit, no
+   * settle problem) is a pass; the failure/abort/settle paths above already
+   * recorded their status and must not be overwritten. */
+  if (status == 0)
+    {
+      [result setStatus: GSUITestStatusPassed];
     }
   return status == 0;
 }
@@ -913,6 +957,8 @@ main()
 
   int failures = 0;
   int run = 0;
+  double suiteStart = nowSeconds();
+  NSMutableArray *results = [NSMutableArray array];
   for (NSString *group in
     [[groups allKeys] sortedArrayUsingSelector:@selector(compare:)])
     {
@@ -922,28 +968,85 @@ main()
           START_SET(gname)
           SKIP("scripts under 'heavy' need UI_TEST_LEVEL=full.\nThese scripts launch external apps (Chrome, Viking); run with 'UI_TEST_LEVEL=full gnustep-tests .' to enable them.")
           END_SET(gname)
+          /* Skipped tests are still part of the report, so the JUnit counts
+           * match what a CI consumer expects to see. */
+          for (NSString *abs in [groups objectForKey:group])
+            {
+              GSUITestResult *r = [[GSUITestResult alloc] init];
+              [r setClassName: group];
+              [r setName: displayPath(abs)];
+              [r setDuration: 0.001];
+              [r setStatus: GSUITestStatusSkipped];
+              [r setMessage: @"scripts under 'heavy' need UI_TEST_LEVEL=full"];
+              [results addObject:r];
+              [r release];
+            }
           continue;
         }
       const char *gname = [group UTF8String];
       START_SET(gname)
       for (NSString *abs in [groups objectForKey:group])
         {
-          BOOL ok = runScript(abs);
+          GSUITestResult *r = [[GSUITestResult alloc] init];
+          [r setClassName: group];
+          [r setName: displayPath(abs)];
+          BOOL ok = runScript(abs, r);
           PASS(ok, "%s", [displayPath(abs) UTF8String]);
           run++;
           if (!ok)
             {
               failures++;
             }
+          [results addObject:r];
+          [r release];
         }
       END_SET(gname)
     }
 
-  RELEASE(pool);
+  double suiteSeconds = nowSeconds() - suiteStart;
+  GSUITestJUnitReporter *reporter = [[[GSUITestJUnitReporter alloc] init]
+    autorelease];
+  NSString *junit = [reporter xmlStringWithResults: results
+    suiteTime: suiteSeconds];
+
   /* One clean, greppable summary line: the harness exit status gates 'make
    * test' / CI, and this is the at-a-glance PASS/FAIL count for humans. */
   fprintf(stderr, "UITEST SUMMARY: %d run, %d failed, %d passed\n",
     run, failures, run - failures);
+  /* The JUnit report is the machine-readable result: print it last, on
+   * stdout, so CI tooling can capture it (e.g. run-uitests.sh redirects it to
+   * a file) without parsing the human-oriented PASS/FAIL lines. Printed
+   * before the pool is released: the report is autoreleased. */
+  printf("%s", [junit UTF8String]);
+  /* When UITEST_JUNIT_OUTPUT names a file, also write the report there so CI
+   * can collect it as an artifact without scraping stdout. The write is
+   * best-effort: it must not hide a test failure, so a write error is only a
+   * stderr diagnostic. */
+  const char *outEnv = getenv("UITEST_JUNIT_OUTPUT");
+  if (outEnv != NULL && *outEnv != '\0')
+    {
+      NSString *outPath = [NSString stringWithUTF8String: outEnv];
+      NSString *dir = [outPath stringByDeletingLastPathComponent];
+      if ([dir length] > 0)
+        {
+          [[NSFileManager defaultManager] createDirectoryAtPath: dir
+            withIntermediateDirectories: YES attributes: nil error: NULL];
+        }
+      NSError *werr = nil;
+      if ([junit writeToFile: outPath atomically: YES
+        encoding: NSUTF8StringEncoding error: &werr])
+        {
+          fprintf(stderr, "JUnit report written to %s\n", [outPath UTF8String]);
+        }
+      else
+        {
+          fprintf(stderr, "JUnit report: cannot write %s: %s\n",
+            [outPath UTF8String],
+            werr ? [[werr localizedDescription] UTF8String] : "unknown error");
+        }
+    }
+
+  RELEASE(pool);
   /* A failed uitest must fail the process: 'make test' in gershwin-developer
    * (and any CI wrapper) gates on the exit status. */
   return failures > 0 ? 1 : 0;

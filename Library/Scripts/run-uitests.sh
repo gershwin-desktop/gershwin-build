@@ -36,6 +36,10 @@ UITEST_SESSION="${UITEST_SESSION:-session}"
 UITEST_ISOLATED_USER="${UITEST_ISOLATED_USER:-uitest}"
 UITEST_ISOLATED_DISPLAY="${UITEST_ISOLATED_DISPLAY:-:99}"
 
+# Where the JUnit report lands. Default is the spec's conventional location
+# (uitest.md section 19/23) inside the repository; CI uploads this file.
+JUNIT_OUTPUT="${UITEST_JUNIT_OUTPUT:-$WORKDIR/build/test-results/junit.xml}"
+
 # Start a background process that must outlive this shell.
 start_bg()
 {
@@ -311,9 +315,29 @@ if [ ! -x "$HARNESS" ]; then
   exit 1
 fi
 
+# In isolated mode the harness runs as the test user, which cannot write into
+# the (usually root-owned) checkout, so have it write to a world-writable path
+# and copy the result back out as the invoking user afterwards.
+if [ "$UITEST_SESSION" = "isolated" ]; then
+  HARNESS_JUNIT=/tmp/uitest-junit.xml
+else
+  HARNESS_JUNIT="$JUNIT_OUTPUT"
+fi
+
 session_run env UITEST_SEARCH_DIRS="$UITEST_SEARCH_DIRS" UI_TEST_LEVEL="$UI_TEST_LEVEL" \
+  UITEST_JUNIT_OUTPUT="$HARNESS_JUNIT" \
   "$HARNESS"
 rc=$?
+
+if [ -f "$HARNESS_JUNIT" ]; then
+  mkdir -p "$(dirname "$JUNIT_OUTPUT")"
+  # In session mode the harness wrote the file directly; only move it out of
+  # the isolated sandbox when it landed at a different path.
+  if [ "$HARNESS_JUNIT" != "$JUNIT_OUTPUT" ]; then
+    cp "$HARNESS_JUNIT" "$JUNIT_OUTPUT"
+  fi
+  echo "JUnit report: $JUNIT_OUTPUT" >&2
+fi
 
 restore_appkit_bundles
 

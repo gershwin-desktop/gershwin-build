@@ -339,6 +339,12 @@ if [ -f "$HARNESS_JUNIT" ]; then
   echo "JUnit report: $JUNIT_OUTPUT" >&2
 fi
 
+# Diagnostic: bring back the launched-app launch log (Processes writes
+# /tmp/processes_launch.log) next to the junit report so CI artifacts carry it.
+if [ -f /tmp/processes_launch.log ]; then
+  cp /tmp/processes_launch.log "$(dirname "$JUNIT_OUTPUT")/processes_launch.log" 2>/dev/null || true
+fi
+
 restore_appkit_bundles
 
 # Leave a clean slate: the isolated desktop (Menu, WindowManager, Workspace,

@@ -63,7 +63,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: junit-freebsd-14-amd64
-          path: build/test-results/junit.xml
+          path: build/test-results/*
           if-no-files-found: warn
 
       # Publish the JUnit report as a check run / PR annotation so the results
@@ -118,7 +118,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: junit-archlinux-x86_64
-          path: build/test-results/junit.xml
+          path: build/test-results/*
           if-no-files-found: warn
 
       # test-reporter runs git as root inside the container, but the workspace
@@ -194,7 +194,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: junit-debian-x86_64
-          path: build/test-results/junit.xml
+          path: build/test-results/*
           if-no-files-found: warn
 
       # test-reporter runs git as root inside the container, but the workspace
@@ -299,7 +299,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: junit-openbsd-78-amd64
-          path: build/test-results/junit.xml
+          path: build/test-results/*
           if-no-files-found: warn
 
       # Publish the JUnit report as a check run / PR annotation so the results

@@ -30,3 +30,4 @@ libXrandr
 libarchive
 ffmpeg
 sqlite3
+xdotool

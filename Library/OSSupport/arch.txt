@@ -38,3 +38,4 @@ automake
 libtool
 ffmpeg
 sqlite
+xdotool

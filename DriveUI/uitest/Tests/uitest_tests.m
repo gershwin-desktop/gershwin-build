@@ -905,6 +905,11 @@ main()
       suite = NO;
       SKIP("run_uitest is not installed.\nInstall the DriveUI tools to run the UI tests.")
     }
+  if (suite && system("command -v xdotool >/dev/null 2>&1") != 0)
+    {
+      suite = NO;
+      SKIP("xdotool is not on PATH.\nReal key events for global grabs (Cmd+Space etc.) need it; install it (e.g. via bootstrap.sh) to run the UI tests.")
+    }
   if (suite)
     {
       BOOL menuRunning = processRunning(@"Menu");

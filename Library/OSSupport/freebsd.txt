@@ -41,3 +41,4 @@ libvncserver
 freerdp
 ffmpeg
 sqlite3
+xdotool

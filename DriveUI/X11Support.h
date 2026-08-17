@@ -86,4 +86,10 @@
 // effect, instead of assuming the WM honoured it.
 + (BOOL)isWindowActive:(unsigned long)xid;
 
+// Resolve the absolute path of an executable by name from the PATH
+// environment variable.  System helper tools (xdotool, ffmpeg, ...) live at
+// different paths per OS, so callers must not hardcode them; pass the bare
+// name and use the returned path (nil when the tool is not on PATH).
++ (NSString *)pathForExecutable:(NSString *)name;
+
 @end

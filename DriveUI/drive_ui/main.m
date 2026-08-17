@@ -561,8 +561,16 @@ static int CaptureScreenshot(NSString *path)
   NSString *display = [[NSProcessInfo processInfo] environment][@"DISPLAY"];
   if (display == nil || [display length] == 0) display = @":0";
 
+  NSString *ffmpeg = [X11Support pathForExecutable: @"ffmpeg"];
+  if (ffmpeg == nil)
+    {
+      fprintf(stderr, "drive_ui: screenshot needs the ffmpeg utility on PATH "
+              "(x11grab screen capture)\n");
+      return 1;
+    }
+
   NSTask *task = [[NSTask alloc] init];
-  [task setLaunchPath: @"/bin/ffmpeg"];
+  [task setLaunchPath: ffmpeg];
   [task setArguments: [NSArray arrayWithObjects:
     @"-f", @"x11grab", @"-i", display, @"-frames:v", @"1",
     @"-update", @"1", @"-y", @"-loglevel", @"error", target, nil]];
@@ -1847,6 +1855,15 @@ int main(int argc, const char *argv[])
        * server (via the xdotool utility) so global key grabs fire - which
        * synthetic XSendEvent chords cannot do.  xdotool is a system tool; we
        * do not link XTest ourselves. */
+      NSString *xdotool = [X11Support pathForExecutable: @"xdotool"];
+      if (xdotool == nil)
+        {
+          fprintf(stderr, "drive_ui: physical_key needs the xdotool utility "
+                  "on PATH (real key events for global grabs cannot be "
+                  "synthesized without it)\n");
+          [pool release];
+          return 1;
+        }
       NSMutableArray *positionals = [NSMutableArray array];
       for (NSUInteger i = 1; i < [args count]; i++)
         {
@@ -1879,7 +1896,7 @@ int main(int argc, const char *argv[])
       @try
         {
           NSTask *down = [[NSTask alloc] init];
-          [down setLaunchPath: @"/bin/xdotool"];
+          [down setLaunchPath: xdotool];
           NSMutableArray *downArgs = [NSMutableArray arrayWithObject: @"keydown"];
           if ([modParts count] > 0) [downArgs addObject: [modParts componentsJoinedByString: @"+"]];
           [down setArguments: downArgs];
@@ -1888,14 +1905,14 @@ int main(int argc, const char *argv[])
           [down release];
 
           NSTask *tap = [[NSTask alloc] init];
-          [tap setLaunchPath: @"/bin/xdotool"];
+          [tap setLaunchPath: xdotool];
           [tap setArguments: [NSArray arrayWithObjects: @"key", keyPart, nil]];
           [tap launch];
           [tap waitUntilExit];
           [tap release];
 
           NSTask *up = [[NSTask alloc] init];
-          [up setLaunchPath: @"/bin/xdotool"];
+          [up setLaunchPath: xdotool];
           NSMutableArray *upArgs = [NSMutableArray arrayWithObject: @"keyup"];
           if ([modParts count] > 0) [upArgs addObject: [modParts componentsJoinedByString: @"+"]];
           [up setArguments: upArgs];

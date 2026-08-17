@@ -1732,17 +1732,16 @@ static void SetErr(NSString **err, NSString *m)
   /* ffmpeg's x11grab is our screen-capture backend (the same approach the
    * Screenshot component takes for X11); it is always present on systems with
    * libav.  The binary lives at different paths per OS (Linux: /usr/bin or
-   * /bin, the BSDs: /usr/local/bin), so resolve it from PATH plus the usual
-   * locations instead of hardcoding one.  Capture the whole root window so
-   * hidden/off-screen state does not matter. */
+   * /bin, the BSDs: /usr/local/bin), so resolve it from PATH instead of
+   * hardcoding one location.  Capture the whole root window so hidden/
+   * off-screen state does not matter. */
   NSString *display = [[NSProcessInfo processInfo] environment][@"DISPLAY"];
   if (display == nil || [display length] == 0) display = @":0";
-  NSString *ffmpeg = @"/usr/bin/ffmpeg";
-  for (NSString *p in [NSArray arrayWithObjects:
-    @"/usr/bin/ffmpeg", @"/bin/ffmpeg", @"/usr/local/bin/ffmpeg", nil])
+  NSString *ffmpeg = [X11Support pathForExecutable: @"ffmpeg"];
+  if (ffmpeg == nil)
     {
-      if ([[NSFileManager defaultManager] isExecutableFileAtPath: p])
-        { ffmpeg = p; break; }
+      if (err) *err = @"ffmpeg not found on PATH (needed for screen capture)";
+      return NO;
     }
   NSArray *argv = [NSArray arrayWithObjects:
     @"-f", @"x11grab",

@@ -665,7 +665,7 @@ runScript(NSString *abs)
   [task setArguments:[NSArray arrayWithObject:abs]];
 
   /* Redirect stderr to a temp file rather than a pipe: scripts launch apps
-   * (xterm, Processes, ...) that inherit the stderr fd and outlive the task,
+   * (Processes, ...) that inherit the stderr fd and outlive the task,
    * so reading a pipe to EOF would deadlock.  A file's contents are complete
    * on disk regardless of who still holds the fd. */
   char tmpl[] = "/tmp/uitest_err_XXXXXX";

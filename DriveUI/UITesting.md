@@ -225,7 +225,7 @@ documented here because they are the building blocks of the shipped tests.
 **Launching through the Run dialog**
 
 ```text
-run "xterm"
+run "Processes"
 run "/System/Applications/Utilities/Processes.app/Processes"
 ```
 

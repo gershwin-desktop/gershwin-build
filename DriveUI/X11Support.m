@@ -889,12 +889,12 @@ static KeySym ChordKeysym(NSString *key) {
 }
 
 /* Resolve the absolute path of an executable by name using the PATH
- * environment variable.  System helper tools (xdotool for real key events,
+ * environment variable. System helper tools (xdotool for real key events,
  * ffmpeg for screen capture) live at different paths per OS - Linux puts
  * them in /usr/bin or /bin, the BSDs in /usr/local/bin - so hardcoding one
- * path breaks on everything but a single distro.  An absolute `name` is
+ * path breaks on everything but a single distro. An absolute `name` is
  * accepted as-is (and only if executable); otherwise each PATH directory is
- * tried.  Returns nil when the tool is not on PATH. */
+ * tried. Returns nil when the tool is not on PATH. */
 + (NSString *)pathForExecutable:(NSString *)name
 {
   if (name == nil || [name length] == 0)

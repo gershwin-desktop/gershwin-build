@@ -44,7 +44,7 @@
  *   drive_ui [--pid N] assert contains --text <needle>
  *   drive_ui [--pid N] wait_until [--class C] [--text T] [--tag N] [--window W] [--visible] [--timeout N] [--not-exists]
  *   drive_ui [--pid N] capture [<path>]         (screenshot root window to PNG)
- *   drive_ui [--pid N] press                     (press Return)
+ *   drive_ui [--pid N] press [<key>]            (press Return, or the named key)
  *   drive_ui [--pid N] chord <mods> <key>        (e.g. chord control c)
  *
  * Snapshot fields: depth  class  text  tag  frame  screen_frame  hidden  object_id  window  stability
@@ -638,7 +638,7 @@ static void Usage(void)
   printf("  drive_ui [--pid N] wait_until [--class C] [--text T] [--tag N] [--window W] [--visible] [--timeout N] [--not-exists]\n");
   printf("  drive_ui [--pid N] font <object_id>           (read-only: resolved fontName/bold of a widget)\n");
   printf("  drive_ui [--pid N] capture [<path>]           (screenshot root window to PNG)\n");
-  printf("  drive_ui [--pid N] press                     (press Return)\n");
+  printf("  drive_ui [--pid N] press [<key>]             (press Return, or the named key)\n");
   printf("  drive_ui [--pid N] chord <mods> <key>        (e.g. chord control c)\n");
   printf("  drive_ui [--pid N] modal                     (report current modal window: none or Class|title)\n");
   printf("Snapshot: depth\\tclass\\ttext\\ttag\\tframe\\tscreen_frame\\thidden\\tobject_id\\twindow\\tstability\n");
@@ -1742,9 +1742,21 @@ int main(int argc, const char *argv[])
     }
   else if ([command isEqualToString: @"press"])
     {
-      /* Press Return via a real X11 key event. */
+      /* Press Return via a real X11 key event, or the key named by the
+       * optional <key> argument (Escape, Tab, ...).  The query engine sends
+       * single-key presses (e.g. press "Escape") through this command, so the
+       * key must be honored rather than always pressing Return. */
+      NSMutableArray *positionals = [NSMutableArray array];
+      for (NSUInteger i = 1; i < [args count]; i++)
+        {
+          NSString *a = [args objectAtIndex: i];
+          if ([a hasPrefix: @"--"]) { i++; continue; }
+          [positionals addObject: a];
+        }
+      NSString *key = ([positionals count] > 0) ? [positionals objectAtIndex: 0]
+                                               : @"Return";
       [X11Support setFocusToPID: pid];
-      [X11Support simulateChordWithModifiers: [NSArray array] key: @"Return"];
+      [X11Support simulateChordWithModifiers: [NSArray array] key: key];
     }
   else if ([command isEqualToString: @"sendkeys"])
     {

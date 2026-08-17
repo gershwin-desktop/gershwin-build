@@ -1144,6 +1144,12 @@ static NSString *ShortcutForItem(NSMenuItem *item)
           if (ph && [ph isKindOfClass: [NSString class]] && [ph length] > 0)
             text = ph;
         }
+      } else if ([view isKindOfClass: [NSTextView class]]) {
+        /* Text views (plain NSTextView or subclasses such as the Workspace
+         * CompletionField) expose their contents via -string, not -stringValue;
+         * without this branch they match nothing and stay invisible to
+         * `assert text contains` even while their text is on screen. */
+        text = [(NSTextView *)view string] ?: @"";
       } else if ([view respondsToSelector: @selector(title)]) {
         id t = [view performSelector: @selector(title)];
         if (t && [t isKindOfClass: [NSString class]] && [t length] > 0) text = t;

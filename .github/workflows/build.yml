@@ -66,6 +66,7 @@ jobs:
           name: GNUstep UI tests (FreeBSD)
           path: build/test-results/junit.xml
           reporter: java-junit
+          list-files: none
           fail-on-error: false
 
   build-archlinux-x86_64:
@@ -77,8 +78,15 @@ jobs:
     steps:
       - name: Install build prerequisites
         run: |
-          pacman -Syu --noconfirm
-          pacman -S --noconfirm base-devel git tree squashfs-tools xorg-server-xvfb xorg-xdpyinfo procps-ng ffmpeg xterm lcms2 sqlite
+          # Retry pacman: Arch mirrors occasionally 404 on freshly published
+          # package versions, which previously broke the whole job (git ended
+          # up missing, so the test-reporter below could not run).
+          for attempt in 1 2 3 4 5; do
+            pacman -Syu --noconfirm && pacman -S --noconfirm base-devel git tree squashfs-tools xorg-server-xvfb xorg-xdpyinfo procps-ng ffmpeg xterm lcms2 sqlite && break
+            echo "pacman attempt $attempt failed, retrying in 15s"
+            sleep 15
+          done
+          pacman -Q git >/dev/null
 
       - uses: actions/checkout@v4
 
@@ -104,6 +112,15 @@ jobs:
           path: build/test-results/junit.xml
           if-no-files-found: warn
 
+      # test-reporter runs git as root inside the container, but the workspace
+      # was cloned by the runner user (uid 1001) - git refuses to touch it
+      # ("dubious ownership"). --global is HOME-dependent and does not work in
+      # container runs, so use the --system scope (/etc/gitconfig). Must also
+      # run when the UI tests failed, hence the unconditional if: always().
+      - name: Mark workspace as a git safe.directory
+        if: always()
+        run: git config --system --add safe.directory "$GITHUB_WORKSPACE"
+
       # Publish the JUnit report as a check run / PR annotation so the results
       # are visible in the Actions UI without downloading the artifact.
       - name: Publish UI test results
@@ -113,6 +130,7 @@ jobs:
           name: GNUstep UI tests (Arch)
           path: build/test-results/junit.xml
           reporter: java-junit
+          list-files: none
           fail-on-error: false
 
       - name: Package
@@ -170,6 +188,15 @@ jobs:
           path: build/test-results/junit.xml
           if-no-files-found: warn
 
+      # test-reporter runs git as root inside the container, but the workspace
+      # was cloned by the runner user (uid 1001) - git refuses to touch it
+      # ("dubious ownership"). --global is HOME-dependent and does not work in
+      # container runs, so use the --system scope (/etc/gitconfig). Must also
+      # run when the UI tests failed, hence the unconditional if: always().
+      - name: Mark workspace as a git safe.directory
+        if: always()
+        run: git config --system --add safe.directory "$GITHUB_WORKSPACE"
+
       # Publish the JUnit report as a check run / PR annotation so the results
       # are visible in the Actions UI without downloading the artifact.
       - name: Publish UI test results
@@ -179,6 +206,7 @@ jobs:
           name: GNUstep UI tests (Debian)
           path: build/test-results/junit.xml
           reporter: java-junit
+          list-files: none
           fail-on-error: false
 
       - name: Package
@@ -263,4 +291,5 @@ jobs:
           name: GNUstep UI tests (OpenBSD)
           path: build/test-results/junit.xml
           reporter: java-junit
+          list-files: none
           fail-on-error: false

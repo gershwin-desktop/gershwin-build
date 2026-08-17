@@ -883,6 +883,48 @@ displayPath(NSString *abs)
   return abs;
 }
 
+/* Write the JUnit report: print the XML on stdout (for tooling that captures
+ * it) and, when UITEST_JUNIT_OUTPUT names a file, write it there too so CI
+ * can collect it as an artifact.  A skipped suite still emits a report (with
+ * the skip recorded) so CI consumers always find a junit.xml. */
+static void
+writeJUnitReport(NSArray *results, double suiteSeconds)
+{
+  GSUITestJUnitReporter *reporter = [[[GSUITestJUnitReporter alloc] init]
+    autorelease];
+  NSString *junit = [reporter xmlStringWithResults: results
+    suiteTime: suiteSeconds];
+
+  /* The JUnit report is the machine-readable result: print it last, on
+   * stdout, so CI tooling can capture it (e.g. run-uitests.sh redirects it to
+   * a file) without parsing the human-oriented PASS/FAIL lines.  Printed
+   * before the pool is released: the report is autoreleased. */
+  printf("%s", [junit UTF8String]);
+  const char *outEnv = getenv("UITEST_JUNIT_OUTPUT");
+  if (outEnv != NULL && *outEnv != '\0')
+    {
+      NSString *outPath = [NSString stringWithUTF8String: outEnv];
+      NSString *dir = [outPath stringByDeletingLastPathComponent];
+      if ([dir length] > 0)
+        {
+          [[NSFileManager defaultManager] createDirectoryAtPath: dir
+            withIntermediateDirectories: YES attributes: nil error: NULL];
+        }
+      NSError *werr = nil;
+      if ([junit writeToFile: outPath atomically: YES
+        encoding: NSUTF8StringEncoding error: &werr])
+        {
+          fprintf(stderr, "JUnit report written to %s\n", [outPath UTF8String]);
+        }
+      else
+        {
+          fprintf(stderr, "JUnit report: cannot write %s: %s\n",
+            [outPath UTF8String],
+            werr ? [[werr localizedDescription] UTF8String] : "unknown error");
+        }
+    }
+}
+
 int
 main()
 {
@@ -928,6 +970,19 @@ main()
 
   if (!suite)
     {
+      /* The suite was skipped (missing prerequisite).  Still emit a JUnit
+       * report with the skip recorded so CI consumers find a junit.xml even
+       * when nothing ran. */
+      NSMutableArray *results = [NSMutableArray array];
+      GSUITestResult *r = [[GSUITestResult alloc] init];
+      [r setClassName: @"prerequisites"];
+      [r setName: @"uitest suite"];
+      [r setDuration: 0.001];
+      [r setStatus: GSUITestStatusSkipped];
+      [r setMessage: @"suite skipped (missing prerequisite)"];
+      [results addObject:r];
+      [r release];
+      writeJUnitReport(results, 0.0);
       RELEASE(pool);
       return 0;
     }
@@ -1009,47 +1064,12 @@ main()
     }
 
   double suiteSeconds = nowSeconds() - suiteStart;
-  GSUITestJUnitReporter *reporter = [[[GSUITestJUnitReporter alloc] init]
-    autorelease];
-  NSString *junit = [reporter xmlStringWithResults: results
-    suiteTime: suiteSeconds];
+  writeJUnitReport(results, suiteSeconds);
 
   /* One clean, greppable summary line: the harness exit status gates 'make
    * test' / CI, and this is the at-a-glance PASS/FAIL count for humans. */
   fprintf(stderr, "UITEST SUMMARY: %d run, %d failed, %d passed\n",
     run, failures, run - failures);
-  /* The JUnit report is the machine-readable result: print it last, on
-   * stdout, so CI tooling can capture it (e.g. run-uitests.sh redirects it to
-   * a file) without parsing the human-oriented PASS/FAIL lines. Printed
-   * before the pool is released: the report is autoreleased. */
-  printf("%s", [junit UTF8String]);
-  /* When UITEST_JUNIT_OUTPUT names a file, also write the report there so CI
-   * can collect it as an artifact without scraping stdout. The write is
-   * best-effort: it must not hide a test failure, so a write error is only a
-   * stderr diagnostic. */
-  const char *outEnv = getenv("UITEST_JUNIT_OUTPUT");
-  if (outEnv != NULL && *outEnv != '\0')
-    {
-      NSString *outPath = [NSString stringWithUTF8String: outEnv];
-      NSString *dir = [outPath stringByDeletingLastPathComponent];
-      if ([dir length] > 0)
-        {
-          [[NSFileManager defaultManager] createDirectoryAtPath: dir
-            withIntermediateDirectories: YES attributes: nil error: NULL];
-        }
-      NSError *werr = nil;
-      if ([junit writeToFile: outPath atomically: YES
-        encoding: NSUTF8StringEncoding error: &werr])
-        {
-          fprintf(stderr, "JUnit report written to %s\n", [outPath UTF8String]);
-        }
-      else
-        {
-          fprintf(stderr, "JUnit report: cannot write %s: %s\n",
-            [outPath UTF8String],
-            werr ? [[werr localizedDescription] UTF8String] : "unknown error");
-        }
-    }
 
   RELEASE(pool);
   /* A failed uitest must fail the process: 'make test' in gershwin-developer

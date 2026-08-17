@@ -179,7 +179,7 @@ session_run()
         GNUSTEP_USER_ROOT="$_home/.GNUstep" \
         FONTCONFIG_FILE=/System/Library/Preferences/fonts.conf \
         FONTCONFIG_PATH=/System/Library/Preferences \
-        PATH=/System/Library/Tools:/usr/bin:/bin \
+        PATH=/System/Library/Tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
         "$@"
     ' _ "$UITEST_ISOLATED_DISPLAY" "/home/$UITEST_ISOLATED_USER" "$@"
   else

@@ -57,6 +57,17 @@ jobs:
           path: build/test-results/junit.xml
           if-no-files-found: warn
 
+      # Publish the JUnit report as a check run / PR annotation so the results
+      # are visible in the Actions UI without downloading the artifact.
+      - name: Publish UI test results
+        if: always()
+        uses: dorny/test-reporter@v2
+        with:
+          name: GNUstep UI tests (FreeBSD)
+          path: build/test-results/junit.xml
+          reporter: java-junit
+          fail-on-error: false
+
   build-archlinux-x86_64:
     name: Arch x86_64
     runs-on: ubuntu-latest
@@ -92,6 +103,17 @@ jobs:
           name: junit-archlinux-x86_64
           path: build/test-results/junit.xml
           if-no-files-found: warn
+
+      # Publish the JUnit report as a check run / PR annotation so the results
+      # are visible in the Actions UI without downloading the artifact.
+      - name: Publish UI test results
+        if: always()
+        uses: dorny/test-reporter@v2
+        with:
+          name: GNUstep UI tests (Arch)
+          path: build/test-results/junit.xml
+          reporter: java-junit
+          fail-on-error: false
 
       - name: Package
         run: |
@@ -147,6 +169,17 @@ jobs:
           name: junit-debian-x86_64
           path: build/test-results/junit.xml
           if-no-files-found: warn
+
+      # Publish the JUnit report as a check run / PR annotation so the results
+      # are visible in the Actions UI without downloading the artifact.
+      - name: Publish UI test results
+        if: always()
+        uses: dorny/test-reporter@v2
+        with:
+          name: GNUstep UI tests (Debian)
+          path: build/test-results/junit.xml
+          reporter: java-junit
+          fail-on-error: false
 
       - name: Package
         run: |
@@ -220,3 +253,14 @@ jobs:
           name: junit-openbsd-78-amd64
           path: build/test-results/junit.xml
           if-no-files-found: warn
+
+      # Publish the JUnit report as a check run / PR annotation so the results
+      # are visible in the Actions UI without downloading the artifact.
+      - name: Publish UI test results
+        if: always()
+        uses: dorny/test-reporter@v2
+        with:
+          name: GNUstep UI tests (OpenBSD)
+          path: build/test-results/junit.xml
+          reporter: java-junit
+          fail-on-error: false

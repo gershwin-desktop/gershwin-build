@@ -622,6 +622,34 @@ checkSettled(double idleThreshold)
   return ok;
 }
 
+/* After each script, report the windows currently mapped and visible on
+ * screen (xdotool search --onlyvisible, a suite prerequisite), so leftover
+ * windows from an earlier test or an unclosed window in a failing test are
+ * visible in the harness log.  One line per window: "id<TAB>pid<TAB>name". */
+static void
+reportMappedWindows(NSString *label)
+{
+  FILE *fp = popen(
+    "DISPLAY=${DISPLAY:-:0} xdotool search --onlyvisible --name \".*\" 2>/dev/null"
+    " | while read -r w; do"
+    "   n=$(DISPLAY=${DISPLAY:-:0} xdotool getwindowname \"$w\" 2>/dev/null);"
+    "   p=$(DISPLAY=${DISPLAY:-:0} xdotool getwindowpid \"$w\" 2>/dev/null);"
+    "   printf '%s\\t%s\\t%s\\n' \"$w\" \"$p\" \"$n\";"
+    " done",
+    "r");
+  if (fp == NULL)
+    {
+      return;
+    }
+  fprintf(stderr, "[windows after %s]\n", [label UTF8String]);
+  char buf[512];
+  while (fgets(buf, sizeof(buf), fp) != NULL)
+    {
+      fprintf(stderr, "  %s", buf);
+    }
+  pclose(fp);
+}
+
 static BOOL
 runScript(NSString *abs, GSUITestResult *result)
 {
@@ -822,6 +850,7 @@ runScript(NSString *abs, GSUITestResult *result)
     {
       [result setStatus: GSUITestStatusPassed];
     }
+  reportMappedWindows([abs lastPathComponent]);
   return status == 0;
 }
 

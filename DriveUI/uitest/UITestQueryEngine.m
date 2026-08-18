@@ -1486,6 +1486,16 @@ static DDSMenuNode *DDSMenuTreeFromReply(NSString *tree)
                error:(NSString **)err
 {
   if (pid_ == 0) { SetErr(err, @"no application target"); return NO; }
+  if (role == DDSRoleApplication)
+    {
+      /* `application` is answered by the same live-process check that
+       * activate/launch use (DriveUI socket or X11 window), so
+       * `assert/wait until not exists application "X"` really verifies the
+       * app has quit, not merely that its window is gone.  The target app
+       * (pid_) may itself have quit - resolveApplication: scans every live
+       * socket and the whole display, so it still answers correctly. */
+      return [self resolveApplication: title error: err];
+    }
   if (role == DDSRoleModal)
     {
       /* `modal` is answered by the app's modal state, not the widget tree. */

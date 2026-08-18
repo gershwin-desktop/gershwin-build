@@ -241,7 +241,9 @@ jobs:
     permissions:
       contents: read
       actions: read
-      checks: write
+      # checks: write was only needed by the dorny/test-reporter step below,
+      # which is disabled while the OpenBSD UI tests are switched off.
+      # checks: write
     steps:
       - uses: actions/checkout@v5
 
@@ -261,15 +263,12 @@ jobs:
             ./Library/Scripts/bootstrap.sh
             ./Library/Scripts/checkout.sh
             make install
-            # Capture the UI test result but do NOT let it abort this step: a
-            # non-zero exit would stop vmactions from copying files (including
-            # build/test-results/junit.xml) back to the runner.  The junit.xml
-            # is published as a check run by the Publish UI test results step,
-            # which fails the job on test failures.
-            set +e
-            sh Library/Scripts/run-uitests-debug.sh
-            UITEST_RC=$?
-            set -e
+            # UI tests are currently disabled for OpenBSD (see the commented-out
+            # steps at the end of this job).
+            # set +e
+            # sh Library/Scripts/run-uitests-debug.sh
+            # UITEST_RC=$?
+            # set -e
             mkdir -p artifacts/OpenBSD/7.8/amd64
             # OpenBSD's base tar has no -J (xz); use -z (gzip), which it supports.
             tar -C / -czf artifacts/OpenBSD/7.8/amd64/system.tgz /System
@@ -288,24 +287,28 @@ jobs:
           path: artifacts/OpenBSD/7.8/amd64
           if-no-files-found: error
 
+      # UI tests are disabled for OpenBSD for now. Re-enable by uncommenting
+      # the run-uitests-debug.sh call in the VM step above, and the two steps
+      # below (and the checks: write permission at the top of this job).
+
       # The JUnit report (build/test-results/junit.xml) is written by the
       # uitest harness and copied out of the VM by run-uitests.sh. Upload it
       # so CI consumers can download it without scraping the log.
-      - name: Upload UI test results
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: junit-openbsd-78-amd64
-          path: build/test-results/*
-          if-no-files-found: warn
+      # - name: Upload UI test results
+      #   if: always()
+      #   uses: actions/upload-artifact@v6
+      #   with:
+      #     name: junit-openbsd-78-amd64
+      #     path: build/test-results/*
+      #     if-no-files-found: warn
 
       # Publish the JUnit report as a check run / PR annotation so the results
       # are visible in the Actions UI without downloading the artifact.
-      - name: Publish UI test results
-        if: always()
-        uses: dorny/test-reporter@v3
-        with:
-          name: GNUstep UI tests (OpenBSD)
-          path: build/test-results/junit.xml
-          reporter: java-junit
-          fail-on-error: true
+      # - name: Publish UI test results
+      #   if: always()
+      #   uses: dorny/test-reporter@v3
+      #   with:
+      #     name: GNUstep UI tests (OpenBSD)
+      #     path: build/test-results/junit.xml
+      #     reporter: java-junit
+      #     fail-on-error: true

@@ -53,6 +53,7 @@ typedef enum
 {
   DDSCmdActivate,
   DDSCmdActivateXWindow,
+  DDSCmdTarget,
   DDSCmdLaunchApp,
   DDSCmdFocusWindow,
   DDSCmdCloseWindow,

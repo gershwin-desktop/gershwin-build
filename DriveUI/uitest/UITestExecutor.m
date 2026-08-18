@@ -100,6 +100,7 @@ static NSString *CommandName(UITestCommandType t)
     {
       case DDSCmdActivate:    return @"activate application";
       case DDSCmdActivateXWindow: return @"activate xwindow";
+      case DDSCmdTarget:      return @"target application";
       case DDSCmdLaunchApp:   return @"launch application";
       case DDSCmdFocusWindow: return @"focus window";
       case DDSCmdCloseWindow: return @"close window";
@@ -222,6 +223,12 @@ static NSString *CommandName(UITestCommandType t)
       break;
     case DDSCmdActivateXWindow:
       rc = ([engine_ activateXWindow: cmd.string error: &err])
+        ? 0 : DDSAccessibilityError;
+      break;
+    case DDSCmdTarget:
+      /* Point subsequent queries at the named app without raising it (see the
+       * parser comment); a click would dismiss popups like the Action Search. */
+      rc = ([engine_ resolveApplication: cmd.string error: &err])
         ? 0 : DDSAccessibilityError;
       break;
     case DDSCmdLaunchApp:

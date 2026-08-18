@@ -143,6 +143,18 @@ Resolves the app by name (matching its running process) and raises its
 frontmost window if it has one.  Applications that have no clickable window,
 such as a desktop, are still selected as the target for later commands.
 
+### target application
+
+```text
+target application "Menu"
+```
+
+Resolves the app by name and makes it the target of subsequent commands
+without raising it.  Unlike `activate application`, it performs no click, so
+it is the right choice when raising the app's window would disturb on-screen
+state - e.g. retargeting to Menu.app while its Action Search box is open,
+which clicking the menu bar would dismiss.
+
 ### focus window
 
 ```text

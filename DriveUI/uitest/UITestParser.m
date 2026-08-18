@@ -587,6 +587,17 @@ case DDSRoleLabel:                        return @"NSTextField";
             line: lineNo col: 1] autorelease];
           cmd.string = str1;
         }
+      else if ([kw isEqualToString: @"target"])
+        {
+          /* target application "X" - resolve the app's pid so subsequent
+           * queries (find/type/assert) inspect its tree, WITHOUT raising it
+           * or clicking anything.  Differs from activate application, which
+           * raises+focuses the app's main window by clicking it - a click
+           * that would dismiss a popup (e.g. Menu.app's Action Search). */
+          cmd = [[[UITestCommand alloc] initWithType: DDSCmdTarget
+            line: lineNo col: 1] autorelease];
+          cmd.string = str1;
+        }
       else if ([kw isEqualToString: @"focus"])
         {
           cmd = [[[UITestCommand alloc] initWithType: DDSCmdFocusWindow

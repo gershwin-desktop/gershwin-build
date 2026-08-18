@@ -398,11 +398,21 @@ watchdogMain(void *arg)
               continue;          /* process gone */
             }
           pushWindow(w, i, pct);
-          double avg = w->windowSum[i] / w->windowCount[i];
-          if (avg > worstAvg)
+          /* Only consider a process for the CPU trip once its rolling window
+           * is FULL.  Tripping on a partially-filled window means a single
+           * 1s burst above the threshold fails the test - which on a slow
+           * QEMU VM (framing a window, a birth/close animation, a full-screen
+           * damage repaint) is legitimate work, not a spin.  A genuine
+           * sustained spin holds every slot of the window above the
+           * threshold, so requiring a full window still catches it. */
+          if (w->windowCount[i] >= w->windowSize)
             {
-              worstAvg = avg;
-              worst = i;
+              double avg = w->windowSum[i] / w->windowCount[i];
+              if (avg > worstAvg)
+                {
+                  worstAvg = avg;
+                  worst = i;
+                }
             }
         }
 
@@ -676,7 +686,11 @@ runScript(NSString *abs, GSUITestResult *result)
    * set high enough to only catch a genuine sustained spin near 100%, and the
    * between-test settle check uses a higher floor than the old 15% - a healthy
    * but busy desktop on a slow VM would otherwise be flagged as a stuck loop
-   * and the whole suite would fail after the first test.  Both stay tunable. */
+   * and the whole suite would fail after the first test.  The in-test trip
+   * additionally requires the process's whole rolling window to be filled, so
+   * a single 1s burst (window birth animation, full-screen damage repaint)
+   * cannot fail a test - only a spin sustained across the whole window can.
+   * Both stay tunable. */
   double threshold = 95.0;
   double idle = 95.0;
   int window = 4;

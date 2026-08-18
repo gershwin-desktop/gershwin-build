@@ -17,6 +17,7 @@
 
 #import "UITest.h"
 #import "../X11Support.h"
+#import <pthread.h>
 #import <signal.h>
 #import <unistd.h>
 
@@ -26,6 +27,34 @@
  * a busy desktop (the Workspace especially) needs a much larger budget. */
 static const double kToolTimeoutFast = 2.0;
 static const double kToolTimeoutApp = 20.0;
+
+/* Pipe drain for runTool:.  A drive_ui reply - the `get_full_tree` dump of a
+ * busy Processes table is 120KB+ - can far exceed the kernel pipe buffer
+ * (16KB on FreeBSD/NextBSD, 64KB on Linux; F_SETPIPE_SZ is not portable).
+ * Reading the pipe only AFTER the task exits would then deadlock: the child
+ * blocks in write() while run_uitest waits for it to finish - the 108s
+ * "stalled DriveUI socket" hang.  Draining each pipe on its own thread as
+ * data arrives removes the buffer size entirely, so any reply works on any OS. */
+typedef struct { NSFileHandle *handle; NSMutableData *data; } DDSDrainContext;
+
+static void *DDSDrainPipe(void *arg)
+{
+  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+  DDSDrainContext *ctx = (DDSDrainContext *)arg;
+  for (;;)
+    {
+      NSData *chunk = [[ctx->handle availableData] retain];
+      if (chunk == nil || [chunk length] == 0)
+        {
+          [chunk release];
+          break;
+        }
+      [ctx->data appendData: chunk];
+      [chunk release];
+    }
+  [pool drain];
+  return NULL;
+}
 
 @implementation UITestQueryEngine
 
@@ -90,6 +119,10 @@ static void DDSMenuNodeFree(DDSMenuNode *n)
  * otherwise hang a script (and the harness) forever.  A stalled subprocess is
  * terminated after the timeout and reported as an error.
  *
+ * stdout and stderr are drained on background threads as the task runs (see
+ * DDSDrainPipe above), so a reply larger than the kernel pipe buffer cannot
+ * block the child in write() while we wait for it to finish.
+ *
  * Each call runs in its own autorelease pool: drive_ui is spawned per query,
  * and a polling command (e.g. wait until) can make hundreds of queries, so
  * the pipes must be released immediately or the script exhausts the file
@@ -131,6 +164,22 @@ static void DDSMenuNodeFree(DDSMenuNode *n)
       return nil;
     }
 
+  NSFileHandle *outHandle = [outPipe fileHandleForReading];
+  NSFileHandle *errHandle = [errPipe fileHandleForReading];
+
+  /* Drain both pipes on background threads from the moment the task starts,
+   * so a large reply (e.g. Processes' full tree) can never fill the kernel
+   * pipe buffer and block drive_ui in write().  A stuck task keeps its pipes
+   * open, so the drainers only finish when the task does (or is terminated
+   * below); join them once the wait is over. */
+  NSMutableData *outData = [[NSMutableData alloc] init];
+  NSMutableData *errData = [[NSMutableData alloc] init];
+  DDSDrainContext outCtx = { outHandle, outData };
+  DDSDrainContext errCtx = { errHandle, errData };
+  pthread_t outThread, errThread;
+  BOOL haveOutThread = (pthread_create(&outThread, NULL, DDSDrainPipe, &outCtx) == 0);
+  BOOL haveErrThread = (pthread_create(&errThread, NULL, DDSDrainPipe, &errCtx) == 0);
+
   NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow: timeout];
   while ([task isRunning] && [[NSDate date] compare: deadline] == NSOrderedAscending)
     {
@@ -143,10 +192,12 @@ static void DDSMenuNodeFree(DDSMenuNode *n)
       [task waitUntilExit];
     }
 
-  NSData *outData = nil;
-  NSFileHandle *outHandle = [outPipe fileHandleForReading];
-  NSFileHandle *errHandle = [errPipe fileHandleForReading];
-  outData = [outHandle readDataToEndOfFile];
+  /* The task is finished, so its write ends are closed and the drainers hit
+   * EOF; join them before reading the accumulated data.  A drainer that
+   * failed to start has nothing to join, and its pipe is empty. */
+  if (haveOutThread) pthread_join(outThread, NULL);
+  if (haveErrThread) pthread_join(errThread, NULL);
+
   NSString *out = [[[NSString alloc] initWithData: outData
     encoding: NSUTF8StringEncoding] autorelease];
   if (timedOut)
@@ -159,7 +210,6 @@ static void DDSMenuNodeFree(DDSMenuNode *n)
     }
   else if ([task terminationStatus] != 0)
     {
-      NSData *errData = [errHandle readDataToEndOfFile];
       NSString *stderrStr = [[[NSString alloc] initWithData: errData
         encoding: NSUTF8StringEncoding] autorelease];
       if (err && [stderrStr length] > 0)
@@ -173,6 +223,9 @@ static void DDSMenuNodeFree(DDSMenuNode *n)
       result = out;
       [task release];
     }
+
+  [outData release];
+  [errData release];
 
   /* Close the pipe descriptors now.  The pool drain below releases the pipes,
    * but the descriptors must not linger until then: a polling command can
@@ -738,33 +791,25 @@ static void SetErr(NSString **err, NSString *m)
  * a tree of (title -> index) and walk the UITest path through it; the resulting
  * index path is passed to `menu_invoke`, which performs the leaf item's
  * action (exactly what a real menu selection does). */
-- (BOOL)selectMenuPath:(NSString *)path error:(NSString **)err
+/* Build a trie of the target app's main menu from the DriveUI `menu` reply.
+ * parents[d] = the node whose submenu items sit at depth d.  parents[0] is
+ * the virtual root holding the top-level bar items; a node with a submenu
+ * becomes the parent of its children at depth+1.  Because the serialized
+ * lines are ordered depth-first, setting parents[depth+1] when we see a
+ * submenu node always yields the correct ancestor for the lines that follow.
+ * max depth is bounded by the menu; 64 is far deeper than any real one. */
+static DDSMenuNode *DDSMenuTreeFromReply(NSString *tree)
 {
-  if (pid_ == 0) { SetErr(err, @"no target application"); return NO; }
-  if (path == nil || [path length] == 0)
-    { SetErr(err, @"select menu needs a path (use \"Top/Sub\")"); return NO; }
-
-  NSString *tree = [self runCollect: [self argvForSubcommand: @"menu"]
-                              error: err];
-  if (!tree) return NO;
-
   DDSMenuNode *root = calloc(1, sizeof(DDSMenuNode));
   root->title = @"";
   root->index = -1;
 
-  /* parents[d] = the node whose submenu items sit at depth d.  parents[0] is
-   * the virtual root holding the top-level bar items; a node with a submenu
-   * becomes the parent of its children at depth+1.  Because the serialized
-   * lines are ordered depth-first, setting parents[depth+1] when we see a
-   * submenu node always yields the correct ancestor for the lines that follow.
-   * max depth is bounded by the menu; 64 is far deeper than any real one. */
   DDSMenuNode *parents[64];
   memset(parents, 0, sizeof(parents));
   parents[0] = root;
 
-  NSArray *lines = [tree componentsSeparatedByString: @"\n"];
   BOOL anyItem = NO;
-  for (NSString *line in lines)
+  for (NSString *line in [tree componentsSeparatedByString: @"\n"])
     {
       NSArray *f = [line componentsSeparatedByString: @"\t"];
       if ([f count] < 5) continue;
@@ -795,54 +840,45 @@ static void SetErr(NSString **err, NSString *m)
 
   if (!anyItem)
     {
-      /* A busy app can answer the menu query slowly (the 1s read timeout),
-       * which surfaces as an empty dump - e.g. right after a view-mode switch
-       * the browsing viewer is busy laying out icons.  Poll until the menu
-       * comes back (up to ~10s); the menu is read-only and the poll is cheap. */
-      for (int attempt = 0; attempt < 40 && !anyItem; attempt++)
-        {
-          usleep (250000);
-          NSString *retryTree = [self runCollect:
-            [self argvForSubcommand: @"menu"] error: nil];
-          if (!retryTree) continue;
-          DDSMenuNodeFree(root);
-          root = calloc(1, sizeof(DDSMenuNode));
-          root->title = @"";
-          root->index = -1;
-          memset(parents, 0, sizeof(parents));
-          parents[0] = root;
-          anyItem = NO;
-          for (NSString *line in [retryTree componentsSeparatedByString: @"\n"])
-            {
-              NSArray *f = [line componentsSeparatedByString: @"\t"];
-              if ([f count] < 5) continue;
-              int depth = [[f objectAtIndex: 0] intValue];
-              int index = [[f objectAtIndex: 1] intValue];
-              NSString *title = [f objectAtIndex: 2];
-              BOOL hasSubmenu = [[f objectAtIndex: 4] isEqualToString: @"1"];
-              if (depth < 0 || depth >= 64) continue;
-              anyItem = YES;
-              DDSMenuNode *parent = parents[depth];
-              if (parent == NULL) continue;
-              parent->kids = realloc(parent->kids, sizeof(DDSMenuNode *) *
-                  (parent->nkids + 1));
-              DDSMenuNode *node = calloc(1, sizeof(DDSMenuNode));
-              node->title = [title copy];
-              node->index = index;
-              node->raw = [line copy];
-              parent->kids[parent->nkids++] = node;
-              if (hasSubmenu && depth + 1 < 64)
-                parents[depth + 1] = node;
-            }
-        }
-    }
-
-  if (!anyItem)
-    {
-      SetErr(err, @"application has no menu (DriveUI menu unsupported?)");
       DDSMenuNodeFree(root);
-      return NO;
+      return NULL;
     }
+  return root;
+}
+
+/* Fetch and parse the target app's main menu, polling until it is non-empty.
+ * A freshly launched or busy app can answer the `menu` query with an empty
+ * reply (the 1s read timeout fires while the app is still installing its
+ * menus), which would otherwise surface as a spurious "has no menu".  Poll
+ * until the menu comes back (up to ~10s); the menu is read-only and the poll
+ * is cheap.  Returns the parsed tree (caller must DDSMenuNodeFree it), or
+ * NULL with *err set on failure. */
+- (DDSMenuNode *)menuTreeWithError:(NSString **)err
+{
+  for (int attempt = 0; attempt < 40; attempt++)
+    {
+      NSString *reply = [self runCollect: [self argvForSubcommand: @"menu"]
+                                   error: err];
+      if (reply)
+        {
+          DDSMenuNode *root = DDSMenuTreeFromReply(reply);
+          if (root)
+            return root;
+        }
+      usleep (250000);
+    }
+  SetErr(err, @"application has no menu (DriveUI menu unsupported?)");
+  return NULL;
+}
+
+- (BOOL)selectMenuPath:(NSString *)path error:(NSString **)err
+{
+  if (pid_ == 0) { SetErr(err, @"no target application"); return NO; }
+  if (path == nil || [path length] == 0)
+    { SetErr(err, @"select menu needs a path (use \"Top/Sub\")"); return NO; }
+
+  DDSMenuNode *root = [self menuTreeWithError: err];
+  if (!root) return NO;
 
   /* Walk the UITest path (split on "/") through the tree. */
   NSArray *segs = [path componentsSeparatedByString: @"/"];
@@ -902,47 +938,8 @@ static void SetErr(NSString **err, NSString *m)
   if (path == nil || [path length] == 0)
     { SetErr(err, @"menu item assert needs a path (use \"Top/Sub\")"); return NO; }
 
-  NSString *tree = [self runCollect: [self argvForSubcommand: @"menu"]
-                              error: err];
-  if (!tree) return NO;
-
-  DDSMenuNode *root = calloc(1, sizeof(DDSMenuNode));
-  root->title = @"";
-  root->index = -1;
-  DDSMenuNode *parents[64];
-  memset(parents, 0, sizeof(parents));
-  parents[0] = root;
-  BOOL anyItem = NO;
-
-  for (NSString *line in [tree componentsSeparatedByString: @"\n"])
-    {
-      NSArray *f = [line componentsSeparatedByString: @"\t"];
-      if ([f count] < 5) continue;
-      int depth = [[f objectAtIndex: 0] intValue];
-      int index = [[f objectAtIndex: 1] intValue];
-      NSString *title = [f objectAtIndex: 2];
-      BOOL hasSubmenu = [[f objectAtIndex: 4] isEqualToString: @"1"];
-      if (depth < 0 || depth >= 64) continue;
-      anyItem = YES;
-      DDSMenuNode *parent = parents[depth];
-      if (parent == NULL) continue;
-      parent->kids = realloc(parent->kids, sizeof(DDSMenuNode *) *
-          (parent->nkids + 1));
-      DDSMenuNode *node = calloc(1, sizeof(DDSMenuNode));
-      node->title = [title copy];
-      node->index = index;
-      node->raw = [line copy];
-      parent->kids[parent->nkids++] = node;
-      if (hasSubmenu && depth + 1 < 64)
-        parents[depth + 1] = node;
-    }
-
-  if (!anyItem)
-    {
-      SetErr(err, @"application has no menu (DriveUI menu unsupported?)");
-      DDSMenuNodeFree(root);
-      return NO;
-    }
+  DDSMenuNode *root = [self menuTreeWithError: err];
+  if (!root) return NO;
 
   NSArray *segs = [path componentsSeparatedByString: @"/"];
   DDSMenuNode *current = root;

@@ -75,7 +75,6 @@ jobs:
           name: GNUstep UI tests (FreeBSD)
           path: build/test-results/junit.xml
           reporter: java-junit
-          list-files: none
           fail-on-error: true
 
   build-archlinux-x86_64:
@@ -139,7 +138,6 @@ jobs:
           name: GNUstep UI tests (Arch)
           path: build/test-results/junit.xml
           reporter: java-junit
-          list-files: none
           fail-on-error: true
 
       - name: Package
@@ -215,7 +213,6 @@ jobs:
           name: GNUstep UI tests (Debian)
           path: build/test-results/junit.xml
           reporter: java-junit
-          list-files: none
           fail-on-error: true
 
       - name: Package
@@ -311,5 +308,4 @@ jobs:
           name: GNUstep UI tests (OpenBSD)
           path: build/test-results/junit.xml
           reporter: java-junit
-          list-files: none
           fail-on-error: true

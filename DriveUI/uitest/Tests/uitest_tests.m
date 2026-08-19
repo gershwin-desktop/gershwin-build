@@ -504,6 +504,30 @@ fileExists(NSString *path)
   return [[NSFileManager defaultManager] fileExistsAtPath:path];
 }
 
+/* Tail of a log file (the desktop components' stderr), used to surface the
+ * crash reason a health-watchdog trip left behind.  Returns nil when the
+ * file is absent or empty. */
+static NSString *
+lastLinesOfLog(NSString *path, int lines)
+{
+  NSData *data = [NSData dataWithContentsOfFile: path];
+  if (!data) return nil;
+  NSString *text = [[NSString alloc] initWithData: data
+    encoding: NSUTF8StringEncoding];
+  if ([text length] == 0)
+    {
+      [text release];
+      return nil;
+    }
+  NSArray *all = [text componentsSeparatedByString: @"\n"];
+  NSUInteger n = [all count];
+  NSUInteger from = (n > (NSUInteger)lines) ? (n - (NSUInteger)lines) : 0;
+  NSArray *tail = [all subarrayWithRange: NSMakeRange(from, n - from)];
+  NSString *joined = [tail componentsJoinedByString: @"\n"];
+  [text release];
+  return joined;
+}
+
 static BOOL
 processRunning(NSString *name)
 {
@@ -824,6 +848,20 @@ runScript(NSString *abs, GSUITestResult *result)
         {
           captureStack(watchdog.watchPids[watchdog.culpritIndex],
             watchdog.watchNames[watchdog.culpritIndex]);
+        }
+      /* A health trip means a desktop component died: its own stderr (the
+       * session logs from run-uitests.sh/uitest-session.sh) usually holds the
+       * crash reason (a GNUstep exception or a signal handler note), so append
+       * its tail to the details for the report.  The runner re-spawns
+       * Workspace itself to /tmp/uitest_workspace.log too, so look at both. */
+      if (watchdog.healthTrip)
+        {
+          NSString *tail = lastLinesOfLog(@"/tmp/uitest_ws.log", 30);
+          if ([tail length] > 0)
+            {
+              [result setDetails: [[result details]
+                stringByAppendingFormat: @"\n--- Workspace stderr tail ---\n%@", tail]];
+            }
         }
     }
   else if (status != 0)

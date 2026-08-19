@@ -399,9 +399,15 @@ a 0 ms timeout thousands of times per second, ~20% CPU).
   must stay below `UITEST_CPU_IDLE` (default 15%) for three consecutive
   samples, otherwise the test fails with a diagnostic - this catches a
   busy-loop that persists with no test driving it.
+- **Wall-clock deadline** every script must finish within `UITEST_TEST_TIMEOUT`
+  (default 120s), no matter what.  A wedged-but-alive desktop - a stalled
+  DriveUI socket answers neither the CPU nor the health checks - would
+  otherwise grind a stuck test until the CI job's overall cap kills the whole
+  run with no report at all.  The deadline aborts the script and fails that
+  test alone in about a minute.
 
 Tune or disable with `UITEST_CPU_WATCH` (off|on), `UITEST_CPU_THRESHOLD`,
-`UITEST_CPU_SAMPLES`, `UITEST_CPU_IDLE`.
+`UITEST_CPU_SAMPLES`, `UITEST_CPU_IDLE`, `UITEST_TEST_TIMEOUT`.
 
 ## 5. Understanding results
 

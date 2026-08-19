@@ -325,6 +325,8 @@ typedef struct
   int windowCount[4];
   int windowIdx[4];
   double windowSum[4];
+  double deadline;               /* epoch seconds; 0 disables the wall-clock trip */
+  double deadlineLimit;          /* configured limit in seconds (for the reason) */
   volatile BOOL stopped;         /* main thread set after waitUntilExit */
   volatile BOOL triggered;
   int culpritIndex;
@@ -464,6 +466,21 @@ watchdogMain(void *arg)
             w->watchNames[worst], worstAvg, w->windowCount[worst],
             w->threshold);
           w->culpritIndex = worst;
+          w->triggered = YES;
+          [w->task terminate];
+          break;
+        }
+      /* Wall-clock deadline: a wedged-but-alive desktop (e.g. a stalled
+       * DriveUI socket) spins neither the CPU nor the health checks, so a
+       * test could otherwise grind through timeouts until the CI job cap
+       * kills everything.  Trip at the deadline so a stuck test fails fast
+       * instead. */
+      if (w->deadline > 0.0 && nowSeconds() >= w->deadline)
+        {
+          snprintf(w->reason, sizeof(w->reason),
+            "test exceeded wall-clock deadline of %.0f s",
+            w->deadlineLimit);
+          w->culpritIndex = -1;
           w->triggered = YES;
           [w->task terminate];
           break;
@@ -694,6 +711,13 @@ runScript(NSString *abs, GSUITestResult *result)
   double threshold = 95.0;
   double idle = 95.0;
   int window = 4;
+  /* Fail-fast wall-clock cap per script.  A wedged-but-alive desktop (stalled
+   * DriveUI socket) trips neither the CPU nor the health watchdog, so without
+   * this a stuck test would grind until the CI job's overall cap (240 min)
+   * kills it.  The default is generous enough for the slowest legit script
+   * (window_placement takes ~90s on the QEMU FreeBSD CI) but turns a hang
+   * into a clean per-test error in about a minute. */
+  double deadline = 120.0;
   const char *env;
   if ((env = getenv("UITEST_CPU_WATCH")) != NULL && strcmp(env, "off") == 0)
     {
@@ -710,6 +734,10 @@ runScript(NSString *abs, GSUITestResult *result)
   if ((env = getenv("UITEST_CPU_IDLE")) != NULL && *env != '\0')
     {
       idle = atof(env);
+    }
+  if ((env = getenv("UITEST_TEST_TIMEOUT")) != NULL && *env != '\0')
+    {
+      deadline = atof(env);
     }
 
   NSTask *task = [[NSTask alloc] init];
@@ -758,6 +786,8 @@ runScript(NSString *abs, GSUITestResult *result)
       watchdog.watchCount = 4;
       watchdog.threshold = threshold;
       watchdog.windowSize = window;
+      watchdog.deadline = nowSeconds() + deadline;
+      watchdog.deadlineLimit = deadline;
       /* Make the watch visible in the log once, so a silent pid-resolution
        * failure (e.g. pgrep missing from PATH) cannot go unnoticed. */
       if (getenv("UITEST_VERBOSE") != NULL)
@@ -789,8 +819,8 @@ runScript(NSString *abs, GSUITestResult *result)
       [result setMessage: [NSString stringWithUTF8String: watchdog.reason]];
       [result setDetails: [NSString stringWithUTF8String: watchdog.reason]];
       /* A CPU trip can still be diagnosed by its stack; a health trip has no
-       * process left to attach to. */
-      if (!watchdog.healthTrip)
+       * process left to attach to, and a deadline trip has no single culprit. */
+      if (!watchdog.healthTrip && watchdog.culpritIndex >= 0)
         {
           captureStack(watchdog.watchPids[watchdog.culpritIndex],
             watchdog.watchNames[watchdog.culpritIndex]);

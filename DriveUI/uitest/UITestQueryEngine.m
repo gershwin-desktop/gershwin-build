@@ -1546,33 +1546,74 @@ static DDSMenuNode *DDSMenuTreeFromReply(NSString *tree)
   /* The app can be transiently busy (a wedge from window churn, or a heavy
    * layout), which makes the 1s read timeout fire even though the widget is
    * there.  Retry the tree fetch a few times so a busy spell does not turn an
-   * `assert` into a spurious "widget not found". */
-  NSString *tree = nil;
+   * `assert` into a spurious "widget not found".
+   *
+   * The JSON tree is preferred: its text values are escaped, so a multi-line
+   * widget (e.g. a document view carrying a whole stderr dump) stays one row
+   * and remains matchable.  The plain-text tree cannot represent embedded
+   * newlines - such a row shatters into tab-less fragments that all fail the
+   * field-count check - so it is only a fallback for older drive_ui builds. */
   for (int attempt = 0; attempt < 8; attempt++)
     {
-      tree = [self runCollect: [self argvForSubcommand: @"get_full_tree"]
-        error: (attempt == 7) ? err : nil];
-      if (tree != nil) break;
-      usleep (250000);
-    }
-  if (!tree) return NO;
-  for (NSString *line in [tree componentsSeparatedByString: @"\n"])
-    {
-      NSArray *f = [line componentsSeparatedByString: @"\t"];
-      if ([f count] < 9) continue;
-      NSString *lineCls = [f objectAtIndex: 1];
-      NSString *lineText = [f objectAtIndex: 2];
-      NSString *hidden = [f objectAtIndex: 6];
-      if ([hidden isEqualToString: @"1"]) continue;
-      if (![self class: lineCls matchesRoleClass: cls]) continue;
-      if (title && ![self title: lineText matches: title]) continue;
-      if (windowTitle && [f count] > 9
-          && ![self title: [f objectAtIndex: 9] matches: windowTitle]) continue;
-      if (needle)
+      NSArray *argv = [self argvForSubcommand: @"get_full_tree"];
+      NSMutableArray *jsonArgv = [NSMutableArray arrayWithArray: argv];
+      [jsonArgv addObject: @"--json"];
+      NSString *json = [self runCollect: jsonArgv error: nil];
+      if (json != nil)
         {
-          if ([self title: lineText matches: needle] == NO) continue;
+          NSData *data = [json dataUsingEncoding: NSUTF8StringEncoding];
+          id parsed = [NSJSONSerialization JSONObjectWithData: data
+            options: 0 error: nil];
+          if ([parsed isKindOfClass: [NSArray class]])
+            {
+              for (NSDictionary *row in parsed)
+                {
+                  if (![row isKindOfClass: [NSDictionary class]]) continue;
+                  if ([[row objectForKey: @"hidden"]
+                       isEqualToString: @"1"]) continue;
+                  if (![self class: [row objectForKey: @"class"]
+                        matchesRoleClass: cls]) continue;
+                  if (windowTitle.length > 0
+                      && ![self title: [row objectForKey: @"window"]
+                        matches: windowTitle]) continue;
+                  if (title && ![self title: [row objectForKey: @"text"]
+                        matches: title]) continue;
+                  if (needle && ![self title: [row objectForKey: @"text"]
+                        matches: needle]) continue;
+                  return YES;
+                }
+              return NO;
+            }
+          /* JSON unavailable or unparsable: fall through to plain text. */
         }
-      return YES;
+
+      NSString *tree = [self runCollect: argv
+        error: (attempt == 7) ? err : nil];
+      if (tree != nil)
+        {
+          BOOL found = NO;
+          for (NSString *line in [tree componentsSeparatedByString: @"\n"])
+            {
+              NSArray *f = [line componentsSeparatedByString: @"\t"];
+              if ([f count] < 9) continue;
+              NSString *lineCls = [f objectAtIndex: 1];
+              NSString *lineText = [f objectAtIndex: 2];
+              NSString *hidden = [f objectAtIndex: 6];
+              if ([hidden isEqualToString: @"1"]) continue;
+              if (![self class: lineCls matchesRoleClass: cls]) continue;
+              if (title && ![self title: lineText matches: title]) continue;
+              if (windowTitle && [f count] > 9
+                  && ![self title: [f objectAtIndex: 9] matches: windowTitle]) continue;
+              if (needle)
+                {
+                  if ([self title: lineText matches: needle] == NO) continue;
+                }
+              found = YES;
+              break;
+            }
+          return found;
+        }
+      usleep (250000);
     }
   return NO;
 }

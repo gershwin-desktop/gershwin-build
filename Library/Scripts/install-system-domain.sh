@@ -323,6 +323,22 @@ build_driveui() {
   ( cd uitest/Tests && $MAKE_CMD -j"$CPUS" && $MAKE_CMD install && $MAKE_CMD clean ) || exit 1
 }
 
+# UI-test scripts can launch helper apps by name ("launch application X"),
+# but run_uitest only starts apps found in the standard .app locations, and
+# the isolated session runs as a dedicated test user whose HOME differs from
+# this install's.  Fixture apps that default to ~/Applications are therefore
+# forced into /System/Applications here, where every user's run_uitest finds
+# them.  The <app>_INSTALL_DIR override on the command line beats any value
+# the fixture's own GNUmakefile sets.
+build_ui_test_fixtures() {
+  ensure_gnustep_env
+  if [ -d "$REPOS_DIR/gershwin-eau-theme/Test" ]; then
+    ( cd "$REPOS_DIR/gershwin-eau-theme/Test" && \
+      $MAKE_CMD alerttest_INSTALL_DIR="/System/Applications" install && \
+      $MAKE_CMD clean ) || exit 1
+  fi
+}
+
 # Dispatch on the requested target.  Default "all" reproduces the original
 # end-to-end System Domain install in the exact same order.
 TARGET="${1:-all}"
@@ -369,6 +385,7 @@ case "$TARGET" in
   test)
     ensure_gnustep_env
     build_driveui
+    build_ui_test_fixtures
     # CI containers have no X session, so run the suite on a fresh virtual
     # display as a dedicated test user rather than the default "session" mode.
     UITEST_SESSION=isolated sh "$WORKDIR/Library/Scripts/run-uitests.sh"

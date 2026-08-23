@@ -31,3 +31,5 @@ libarchive
 ffmpeg
 sqlite3
 xdotool
+bzip2
+xz

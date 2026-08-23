@@ -18,7 +18,6 @@ openssl
 freeglut
 giflib
 libao
-xorg-fonts-truetype
 dbus
 mDNSResponder
 libxcb

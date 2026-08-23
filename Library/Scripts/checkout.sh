@@ -50,6 +50,7 @@ https://github.com/gershwin-desktop/gershwin-textedit.git
 https://github.com/gershwin-desktop/gershwin-windowmanager.git
 https://github.com/gershwin-desktop/gershwin-components.git
 https://github.com/gershwin-desktop/gershwin-assets.git
+https://github.com/gershwin-desktop/docs.git
 "
 
 # Pinned commits, as "<repo name> <commit>". These are upstream libraries; we pin

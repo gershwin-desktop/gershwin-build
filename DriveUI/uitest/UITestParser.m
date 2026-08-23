@@ -632,6 +632,16 @@ case DDSRoleLabel:                        return @"NSTextField";
                 line: lineNo col: 1] autorelease];
               cmd.string = str1;
             }
+          else if ([words count] > 0 &&
+              [[words objectAtIndex: 0] isEqualToString: @"tab"])
+            {
+              /* select tab "Erase" - switch an NSTabView to the item with
+               * that label (in-process via DriveUI; header labels are
+               * owner-drawn and not reliably clickable by coordinates). */
+              cmd = [[[UITestCommand alloc] initWithType: DDSCmdSelectTab
+                line: lineNo col: 1] autorelease];
+              cmd.string = str1;
+            }
           else
             {
               cmd = [[[UITestCommand alloc] initWithType: DDSCmdSelectMenu

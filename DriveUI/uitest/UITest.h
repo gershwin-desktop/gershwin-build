@@ -59,6 +59,7 @@ typedef enum
   DDSCmdCloseWindow,
   DDSCmdSelectMenu,
   DDSCmdSelectGlobalMenu,
+  DDSCmdSelectTab,
   DDSCmdInvokeButton,
   DDSCmdClick,
   DDSCmdDoubleClick,
@@ -256,6 +257,10 @@ typedef enum
 - (BOOL)dragRole:(UITestRole)role title:(NSString *)title inWindow:(NSString *)windowTitle
             byX:(double)dx byY:(double)dy error:(NSString **)err;
 - (BOOL)selectMenuPath:(NSString *)path error:(NSString **)err;
+- (BOOL)selectTabItem:(NSString *)label inWindow:(NSString *)windowTitle
+                error:(NSString **)err;
+- (BOOL)selectTabItem:(NSString *)label inWindow:(NSString *)windowTitle
+                error:(NSString **)err;
 - (BOOL)assertMenuItemPath:(NSString *)path kind:(UITestAssertKind)kind
                   shortcut:(NSString *)shortcut error:(NSString **)err;
 - (BOOL)assertXWindowCount:(NSString *)title op:(NSString *)op

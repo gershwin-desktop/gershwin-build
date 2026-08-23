@@ -107,6 +107,9 @@
 {
   NSArray *_snapshot;
   NSString *_processName;
+  /* Tab-selection handoff to the main thread (select_tab command). */
+  NSTabViewItem *_tabSelItem;
+  NSString *_tabSelReply;
 }
 - (void)serverLoop:(id)unused;
 - (void)serviceConnection:(DriveUIConnection *)conn;
@@ -118,6 +121,7 @@
                       index:(NSInteger *)outIndex error:(NSString **)err;
 - (void)addWindow:(NSWindow *)win depth:(int)depth into:(NSMutableArray *)items;
 - (void)addView:(NSView *)view depth:(int)depth into:(NSMutableArray *)items;
+- (NSString *)selectTabItemOnMainThread:(NSTabViewItem *)item;
 - (NSString *)objectIDForObject:(id)obj;
 - (id)objectForID:(NSString *)objID;
 - (NSString *)snapshotLines;
@@ -515,6 +519,26 @@ static void WriteAll(int fd, const char *bytes)
               NSString *which = ([parts count] > 1) ? [parts objectAtIndex: 1] : @"default";
               NSString *reply = [self invokeModalButton: which];
               WriteAll(fd, [reply UTF8String]);
+            }
+          else if ([cmd isEqualToString: @"select_tab"])
+            {
+              /* select_tab <object_id> - switch an NSTabView to the item of
+               * the given pseudo-row.  Runs on the main thread because the
+               * selection swaps the item views and posts notifications.
+               * This one navigation action is deliberately in-process: tab
+               * headers are owner-drawn, so synthetic clicks at estimated
+               * label coordinates are unreliable across themes. */
+              NSString *objID = ([parts count] > 1) ? [parts objectAtIndex: 1] : nil;
+              id obj = objID != nil ? [self objectForID: objID] : nil;
+              if (![obj isKindOfClass: [NSTabViewItem class]])
+                {
+                  WriteAll(fd, "error:select_tab needs an NSTabViewItem object_id\n");
+                }
+              else
+                {
+                  NSString *reply = [self selectTabItemOnMainThread: obj];
+                  WriteAll(fd, [reply UTF8String]);
+                }
             }
           else if ([cmd isEqualToString: @"props"])
             {
@@ -1214,6 +1238,51 @@ static NSString *ShortcutForItem(NSMenuItem *item)
           [self addTableRows: (NSTableView *)view depth: depth + 1 into: items];
         }
 
+      if ([view isKindOfClass: [NSTabView class]])
+        {
+          /* Tab items are neither subviews nor table rows: the header labels
+           * are owner-drawn by the tab view itself, so without this branch a
+           * whole dimension of the UI is invisible to scripts and cannot be
+           * switched headlessly.  Each item gets one pseudo-row whose frame
+           * approximates its header label rect (labels accumulate from the
+           * left edge of the header strip, measured with the tab font). */
+          NSTabView *tv = (NSTabView *) view;
+          NSInteger n = [tv numberOfTabViewItems];
+          NSFont *font = [tv font] ?: [NSFont systemFontOfSize: 13];
+          CGFloat cursor = 8.0;
+          CGFloat stripH = 25.0;
+          NSWindow *w2 = [view window];
+          for (NSInteger i = 0; i < n; i++)
+            {
+              NSTabViewItem *it = [tv tabViewItemAtIndex: i];
+              NSSize ts = [[it label]
+                sizeWithAttributes: @{NSFontAttributeName: font}];
+              NSRect r = NSMakeRect(cursor, 0, ts.width + 24.0, stripH);
+              cursor += r.size.width;
+              NSString *sf = @"";
+              if (w2)
+                {
+                  NSRect conv = [w2 convertRectToScreen:
+                    [view convertRect: r toView: nil]];
+                  sf = NSStringFromRect(conv);
+                }
+              BOOL hidden2 = [view isHidden];
+              [items addObject: [NSArray arrayWithObjects:
+                [NSNumber numberWithInt: depth + 1],
+                @"NSTabViewItem",
+                [it label] ?: @"",
+                @"0",
+                NSStringFromRect(r),
+                sf,
+                [NSNumber numberWithInt: hidden2 ? 1 : 0],
+                @"1",
+                [self objectIDForObject: it],
+                ownTitle,
+                @"high",
+                nil]];
+            }
+        }
+
       for (NSView *sub in [view subviews])
         {
           [self addView: sub depth: depth + 1 into: items];
@@ -1472,6 +1541,38 @@ static NSString *ShortcutForItem(NSMenuItem *item)
  * with a real XTEST event to wake the modal run loop, which is parked in
  * DPSPeekEvent and only notices stopModalWithCode: once a real X event arrives
  * (NSApplication.m).  Returns "error:<reason>\n" on failure. */
+/* Runs on the main thread via selectTabItemOnMainThread:. */
+- (void)_performSelectTab
+{
+  NSTabViewItem *item = _tabSelItem;
+  _tabSelItem = nil;
+  @try
+    {
+      NSTabView *tv = [item tabView];
+      [tv selectTabViewItem: item];
+      _tabSelReply = [[NSString stringWithFormat: @"ok\n"] retain];
+    }
+  @catch (NSException *e)
+    {
+      _tabSelReply = [[NSString stringWithFormat:
+        @"error:select_tab threw %@\n", e] retain];
+    }
+}
+
+- (NSString *)selectTabItemOnMainThread:(NSTabViewItem *)item
+{
+  if (_tabSelReply != nil)
+    {
+      [_tabSelReply release];
+      _tabSelReply = nil;
+    }
+  _tabSelItem = [item retain];
+  [self performSelectorOnMainThread: @selector(_performSelectTab)
+                         withObject: nil
+                      waitUntilDone: YES];
+  return _tabSelReply;
+}
+
 - (NSString *)invokeModalButton:(NSString *)which
 {
   NSWindow *mw = [NSApp modalWindow];

@@ -700,6 +700,35 @@ static void SetErr(NSString **err, NSString *m)
   return reply;
 }
 
+/* Switch an NSTabView to the tab item whose label matches, through DriveUI's
+ * in-process select_tab command (exact; owner-drawn headers are not reliably
+ * clickable by estimated coordinates). */
+- (BOOL)selectTabItem:(NSString *)label inWindow:(NSString *)windowTitle
+                error:(NSString **)err
+{
+  if (pid_ == 0) { SetErr(err, @"no application target"); return NO; }
+  if (label == nil || [label length] == 0)
+    { SetErr(err, @"select tab needs a label"); return NO; }
+  NSMutableArray *argv = [NSMutableArray arrayWithArray:
+    [self argvForSubcommand: @"select_tab"]];
+  [argv addObject: @"--text"];
+  [argv addObject: label];
+  if (windowTitle != nil)
+    {
+      [argv addObject: @"--window"];
+      [argv addObject: windowTitle];
+    }
+  NSString *reply = [self runCollect: argv error: err];
+  if (reply == nil) return NO;
+  if ([reply hasPrefix: @"error:"])
+    {
+      SetErr(err, [reply stringByTrimmingCharactersInSet:
+        [NSCharacterSet newlineCharacterSet]]);
+      return NO;
+    }
+  return YES;
+}
+
 /* Invoke a button of the current modal window by title ("OK", ...) or
  * "default" for the Return-equivalent button (drive_ui invoke_modal_button).
  * The 1s read timeout can fire while the modal alert's pulsing animation keeps

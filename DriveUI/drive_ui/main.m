@@ -639,6 +639,7 @@ static void Usage(void)
   printf("                                (layout checks: zero-size/hidden/off-screen/clipped)\n");
   printf("  drive_ui [--pid N] menu                       (read-only: main menu tree)\n");
   printf("  drive_ui [--pid N] menu_select \"Top/Sub\"     (perform menu item by title path)\n");
+  printf("  drive_ui [--pid N] select_tab --text <label>       (switch an NSTabView to the tab item with that label)\n");
   printf("  drive_ui [--pid N] menu_invoke <i0> <i1> ...  (perform menu action by index)\n");
   printf("  drive_ui [--pid N] localize <english>          (translate to app language)\n");
   printf("  drive_ui [--pid N] assert [--class C] [--text T] [--tag N] [--window W] [--visible] <exists|not-exists|enabled|checked>\n");
@@ -1380,6 +1381,58 @@ int main(int argc, const char *argv[])
         }
       NSString *path = ([positionals count] > 0) ? [positionals objectAtIndex: 0] : nil;
       int rc = MenuSelect(pid, path);
+      [pool release];
+      return rc;
+    }
+  else if ([command isEqualToString: @"select_tab"])
+    {
+      /* select_tab --text <label> - resolve an NSTabViewItem pseudo-row from
+       * the snapshot and ask the app (in-process, on its main thread) to
+       * switch its NSTabView to that item.  Tab headers are owner-drawn, so
+       * synthetic pointer clicks at estimated label positions are unreliable;
+       * this goes through DriveUI's socket and is exact. */
+      NSString *wantText = nil, *wantWindow = nil;
+      for (NSUInteger i = 1; i < [args count]; i++)
+        {
+          NSString *a = [args objectAtIndex: i];
+          if ([a isEqualToString: @"--text"] && i + 1 < [args count])
+            wantText = [args objectAtIndex: ++i];
+          else if ([a isEqualToString: @"--window"] && i + 1 < [args count])
+            wantWindow = [args objectAtIndex: ++i];
+        }
+      if (wantText == nil)
+        {
+          fprintf(stderr, "drive_ui: select_tab needs --text <label>\n");
+          [pool release];
+          return 2;
+        }
+      NSArray *treeRows = ParseTree(FetchTree(pid));
+      NSArray *row = nil;
+      for (NSArray *r in treeRows)
+        {
+          if ([r count] < 10) continue;
+          if (![r[1] isKindOfClass: [NSString class]]) continue;
+          if (![r[1] isEqualToString: @"NSTabViewItem"]) continue;
+          NSString *lbl = r[2];
+          if (![lbl isKindOfClass: [NSString class]]) continue;
+          if ([lbl compare: wantText options: NSCaseInsensitiveSearch]
+              != NSOrderedSame) continue;
+          BOOL hidden = [r[6] isEqualToString: @"1"];
+          if (hidden) continue;
+          row = r;
+          break;
+        }
+      if (row == nil)
+        {
+          fprintf(stderr, "drive_ui: select_tab: no visible tab item '%s'\n",
+                  [wantText UTF8String]);
+          [pool release];
+          return 1;
+        }
+      NSString *reply = SendCommand(pid,
+        [NSString stringWithFormat: @"select_tab\t%@", row[8]]);
+      fputs([reply UTF8String], stdout);
+      int rc = [reply hasPrefix: @"ok"] ? 0 : 1;
       [pool release];
       return rc;
     }

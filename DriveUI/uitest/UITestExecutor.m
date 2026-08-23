@@ -105,6 +105,7 @@ static NSString *CommandName(UITestCommandType t)
       case DDSCmdFocusWindow: return @"focus window";
       case DDSCmdCloseWindow: return @"close window";
       case DDSCmdSelectMenu:  return @"select menu";
+      case DDSCmdSelectTab:   return @"select tab";
       case DDSCmdSelectGlobalMenu: return @"select global menu";
       case DDSCmdInvokeButton: return @"invoke button";
       case DDSCmdClick:       return @"click";
@@ -257,6 +258,11 @@ static NSString *CommandName(UITestCommandType t)
       if (!cmd.string) { err = @"select menu needs a path (use \"Top/Sub\")"; rc = 1; break; }
       rc = ([engine_ selectMenuPath: cmd.string error: &err])
         ? 0 : DDSAccessibilityError;
+      break;
+    case DDSCmdSelectTab:
+      if (!cmd.string) { err = @"select tab needs a label (use \"select tab \\\"Label\\\"\")"; rc = 1; break; }
+      rc = ([engine_ selectTabItem: cmd.string inWindow: cmd.windowTitle
+                             error: &err]) ? 0 : DDSAccessibilityError;
       break;
     case DDSCmdSelectGlobalMenu:
       if (!cmd.string) { err = @"select global menu needs a path (use \"Top/Sub\")"; rc = 1; break; }

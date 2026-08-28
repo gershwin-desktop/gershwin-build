@@ -1,0 +1,64 @@
+--- a/Source/GSMDNSNetServices.m	2026-08-28 00:29:04
++++ b/Source/GSMDNSNetServices.m	2026-08-28 00:29:04
+@@ -129,6 +129,11 @@
+   
+   BOOL			 isPublishing,		// true if publishing service
+                          isMonitoring;		// true if monitoring
++
++  void			*staleRef;
++    // A DNSServiceRef that has been replaced in _netService and is waiting
++    // to be deallocated from outside a dns_sd callback. See -loop: and
++    // resolverCallback below.
+ } Service;
+ 
+ typedef struct _Monitor		// The actual NSNetServiceMonitor
+@@ -934,6 +939,12 @@
+ 	DESTROY(service->timer);
+       }
+     
++    if (service->staleRef)
++      {
++	DNSServiceRefDeallocate((DNSServiceRef) service->staleRef);
++	service->staleRef = NULL;
++      }
++    
+     if (_netService)
+       {
+ 	DNSServiceRefDeallocate(_netService);
+@@ -1045,6 +1056,20 @@
+ 	  service->interfaceIndex = interfaceIndex;
+ 	  
+ 	  service->timer = nil;
++	  
++	  /* DNSServiceQueryRecord() below writes a NEW DNSServiceRef over
++	     _netService, which still holds the ref created by
++	     DNSServiceResolve(). Without this, that ref becomes unreachable
++	     and leaks a connection to the mDNS daemon on every successful
++	     resolve -- -stop, -dealloc and every error path can only free
++	     whatever is currently in the ivar.
++	     
++	     It cannot simply be deallocated here: this callback runs inside
++	     DNSServiceProcessResult() for that very ref, and freeing it
++	     mid-callback would pull the socket out from under the library as
++	     it unwinds. Hand it to -loop:, which frees it at the top of the
++	     next poll, outside any callback. */
++	  service->staleRef = (void *) _netService;
+ 	  
+ 	  // Prepare query for A and/or AAAA record
+ 	  errorCode = DNSServiceQueryRecord((DNSServiceRef *) &_netService,
+@@ -1423,6 +1448,15 @@
+   struct timeval	tout = { 0 };
+   fd_set		set;
+   DNSServiceErrorType	err = kDNSServiceErr_NoError;
++  Service		*svc = (Service *) _reserved;
++  
++  /* Free the resolve ref that resolverCallback replaced. Safe here: we
++     are not inside a dns_sd callback yet. */
++  if (svc != NULL && svc->staleRef != NULL)
++    {
++      DNSServiceRefDeallocate((DNSServiceRef) svc->staleRef);
++      svc->staleRef = NULL;
++    }
+   
+   sock = DNSServiceRefSockFD(_netService);
+   

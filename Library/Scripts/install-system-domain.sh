@@ -308,6 +308,38 @@ build_components() {
   $MAKE_CMD clean
 }
 
+build_driveui() {
+  # DriveUI tooling (the runtime DriveUI.bundle, the drive_ui CLI and the
+  # run_uitest / uitest_tests harness) lives in this repository rather than
+  # under Library/Sources, so build it from here.  Each piece is installed
+  # separately; the bundle and the tools must end up in /System before the
+  # desktop is started for "make test".
+  cd "$WORKDIR/DriveUI"
+  $MAKE_CMD -j"$CPUS" || exit 1
+  $MAKE_CMD install
+  $MAKE_CMD clean
+  ( cd drive_ui && $MAKE_CMD -j"$CPUS" && $MAKE_CMD install && $MAKE_CMD clean ) || exit 1
+  ( cd uitest && $MAKE_CMD -j"$CPUS" && $MAKE_CMD install && $MAKE_CMD clean ) || exit 1
+  ( cd uitest/Tests && $MAKE_CMD -j"$CPUS" && $MAKE_CMD install && $MAKE_CMD clean ) || exit 1
+}
+
+# UI-test scripts can launch helper apps by name ("launch application X"),
+# but run_uitest only starts apps found in the standard .app locations, and
+# the isolated session runs as a dedicated test user whose HOME differs from
+# this install's.  Fixture apps are therefore installed into
+# /System/Library/CoreServices/Applications, next to other system helpers
+# that users do not launch manually (Menu, ...), where every user's
+# run_uitest finds them.  The <app>_INSTALL_DIR override on the command line
+# beats any value the fixture's own GNUmakefile sets.
+build_ui_test_fixtures() {
+  ensure_gnustep_env
+  if [ -d "$REPOS_DIR/gershwin-eau-theme/Test" ]; then
+    ( cd "$REPOS_DIR/gershwin-eau-theme/Test" && \
+      $MAKE_CMD alerttest_INSTALL_DIR="/System/Library/CoreServices/Applications" install && \
+      $MAKE_CMD clean ) || exit 1
+  fi
+}
+
 # Dispatch on the requested target.  Default "all" reproduces the original
 # end-to-end System Domain install in the exact same order.
 TARGET="${1:-all}"
@@ -317,6 +349,10 @@ case "$TARGET" in
     ;;
   workspace)
     ensure_gnustep_env
+    # gershwin-workspace's MDIndexing prefPane links the PreferencePanes
+    # framework (installed by gershwin-systempreferences); build that first
+    # so <PreferencePanes/PreferencePanes.h> resolves.
+    build_systempreferences
     build_workspace
     ;;
   systempreferences)
@@ -343,19 +379,39 @@ case "$TARGET" in
     ensure_gnustep_env
     build_components
     ;;
+  tooling)
+    ensure_gnustep_env
+    build_driveui
+    ;;
+  test)
+    ensure_gnustep_env
+    build_driveui
+    build_ui_test_fixtures
+    # CI containers have no X session, so run the suite on a fresh virtual
+    # display as a dedicated test user rather than the default "session" mode.
+    UITEST_SESSION=isolated sh "$WORKDIR/Library/Scripts/run-uitests.sh"
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+      echo "UI tests failed (exit $rc)" >&2
+      exit "$rc"
+    fi
+    ;;
   all)
     build_corelibs
-    build_workspace
+    # workspace's MDIndexing prefPane depends on the PreferencePanes
+    # framework, so systempreferences must be built first.
     build_systempreferences
+    build_workspace
     build_eau_theme
     build_terminal
     build_textedit
     build_windowmanager
     build_components
+    build_driveui
     ;;
   *)
     echo "Unknown target: $TARGET"
-    echo "Valid targets: corelibs workspace systempreferences eau-theme terminal textedit windowmanager components all"
+    echo "Valid targets: corelibs workspace systempreferences eau-theme terminal textedit windowmanager components tooling test all"
     exit 1
     ;;
 esac

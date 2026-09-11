@@ -1,0 +1,32 @@
+# Canonical DriveUI UI test harness (GNUstep test framework).
+# Builds and runs every .uitest script found under UITEST_SEARCH_DIRS (a
+# colon-separated list of directories).  The cross-repo driver
+# (/Developer/Library/Sources/run-tests.sh) exports it; the default below
+# covers this directory (the control/ language test).  Scripts for the other
+# components live in their repositories' Tests/ dirs (e.g.
+# gershwin-components/Menu/Tests, gershwin-workspace/Tests) and are found
+# via UITEST_SEARCH_DIRS.
+# Prerequisite: a live desktop session with Menu.app and Workspace running.
+
+# UI tests must never run in parallel.
+SEQUENCE="*"
+
+export RUN_UITEST_BIN="/System/Library/Tools/run_uitest"
+
+# core = all scripts except those under a "heavy" subfolder.
+# full = additionally runs scripts under "heavy" (need Chrome / Viking).
+export UI_TEST_LEVEL="${UI_TEST_LEVEL:-core}"
+
+# CPU watchdog: aborts a script if Menu.app/Workspace/the runner pegs the CPU
+# (a spin or busy-loop), and fails the run if the desktop does not settle
+# between scripts.  Tunables (defaults in brackets):
+#   UITEST_CPU_WATCH      off | on        [on]
+#   UITEST_CPU_THRESHOLD  percent         [90]  during-script trip level
+#   UITEST_CPU_SAMPLES    count           [5]   consecutive samples to trip
+#   UITEST_CPU_IDLE       percent         [15]  between-script settle level
+export UITEST_CPU_WATCH="${UITEST_CPU_WATCH:-on}"
+
+if test -z "${UITEST_SEARCH_DIRS:-}"
+then
+  export UITEST_SEARCH_DIRS="$GSTESTROOT"
+fi

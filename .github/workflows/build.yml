@@ -2,7 +2,7 @@ name: Build Gershwin System
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
   workflow_dispatch:
 
@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 240
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Build inside FreeBSD VM
         uses: vmactions/freebsd-vm@v1
@@ -31,6 +31,15 @@ jobs:
             ./Library/Scripts/bootstrap.sh
             ./Library/Scripts/checkout.sh
             make install
+            # Capture the UI test result but do NOT let it abort this step: a
+            # non-zero exit would stop vmactions from copying files (including
+            # build/test-results/junit.xml) back to the runner.  The junit.xml
+            # is published as a check run by the Publish UI test results step,
+            # which fails the job on test failures.
+            set +e
+            sh Library/Scripts/run-uitests-debug.sh
+            UITEST_RC=$?
+            set -e
             mkdir -p artifacts/FreeBSD/14/amd64
             tar -C / -cJf artifacts/FreeBSD/14/amd64/system.txz /System
             TIMESTAMP=$(date +%y%m%d%H%M%S)
@@ -38,12 +47,35 @@ jobs:
             find /System -type f -perm -111 -exec sh -c 'ldd "$1" 2>/dev/null | awk "/=>/ {print \$3}" | xargs -n1 pkg which 2>/dev/null | grep package | awk "{print \$6}" | sed "s/-[^-]*\$//"' sh {} \; | sort -u > artifacts/FreeBSD/14/amd64/Gershwin-FreeBSD-${TIMESTAMP}.dependencies
             cd artifacts/FreeBSD/14/amd64
             tree -h -D -C -H -./ --houtro=/dev/null -T 'Gershwin System for FreeBSD 14 amd64' ./ > ./index.html
+            exit 0
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: gershwin-freebsd-14-amd64
           path: artifacts/FreeBSD/14/amd64
           if-no-files-found: error
+
+      # The JUnit report (build/test-results/junit.xml) is written by the
+      # uitest harness and copied out of the VM by run-uitests.sh. Upload it
+      # so CI consumers can download it without scraping the log.
+      - name: Upload UI test results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: junit-freebsd-14-amd64
+          path: build/test-results/*
+          if-no-files-found: warn
+
+      # Publish the JUnit report as a check run / PR annotation so the results
+      # are visible in the Actions UI without downloading the artifact.
+      - name: Publish UI test results
+        if: always()
+        uses: dorny/test-reporter@v3
+        with:
+          name: GNUstep UI tests (FreeBSD)
+          path: build/test-results/junit.xml
+          reporter: java-junit
+          fail-on-error: true
 
   build-archlinux-x86_64:
     name: Arch x86_64
@@ -54,10 +86,17 @@ jobs:
     steps:
       - name: Install build prerequisites
         run: |
-          pacman -Syu --noconfirm
-          pacman -S --noconfirm base-devel git tree squashfs-tools xorg-server-xvfb xorg-xdpyinfo procps-ng ffmpeg xterm lcms2 sqlite
+          # Retry pacman: Arch mirrors occasionally 404 on freshly published
+          # package versions, which previously broke the whole job (git ended
+          # up missing, so the test-reporter below could not run).
+          for attempt in 1 2 3 4 5; do
+            pacman -Syu --noconfirm && pacman -S --noconfirm base-devel git tree squashfs-tools xorg-server-xvfb xorg-xdpyinfo procps-ng ffmpeg xterm lcms2 sqlite && break
+            echo "pacman attempt $attempt failed, retrying in 15s"
+            sleep 15
+          done
+          pacman -Q git >/dev/null
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Bootstrap
         run: ./Library/Scripts/bootstrap.sh
@@ -67,6 +106,39 @@ jobs:
 
       - name: Build and install
         run: make install
+
+      - name: Run UI tests
+        run: sh Library/Scripts/run-uitests-debug.sh
+
+      # The JUnit report (build/test-results/junit.xml) is written by the
+      # uitest harness and copied out of the isolated session by run-uitests.sh.
+      - name: Upload UI test results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: junit-archlinux-x86_64
+          path: build/test-results/*
+          if-no-files-found: warn
+
+      # test-reporter runs git as root inside the container, but the workspace
+      # was cloned by the runner user (uid 1001) - git refuses to touch it
+      # ("dubious ownership"). --global is HOME-dependent and does not work in
+      # container runs, so use the --system scope (/etc/gitconfig). Must also
+      # run when the UI tests failed, hence the unconditional if: always().
+      - name: Mark workspace as a git safe.directory
+        if: always()
+        run: git config --system --add safe.directory "$GITHUB_WORKSPACE"
+
+      # Publish the JUnit report as a check run / PR annotation so the results
+      # are visible in the Actions UI without downloading the artifact.
+      - name: Publish UI test results
+        if: always()
+        uses: dorny/test-reporter@v3
+        with:
+          name: GNUstep UI tests (Arch)
+          path: build/test-results/junit.xml
+          reporter: java-junit
+          fail-on-error: true
 
       - name: Package
         run: |
@@ -81,7 +153,7 @@ jobs:
           cd artifacts/ArchLinux/x86_64
           tree -h -D -C -H -./ --houtro=/dev/null -T 'Gershwin System for Arch Linux x86_64' ./ > ./index.html
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: gershwin-archlinux-x86_64
           path: artifacts/ArchLinux/x86_64
@@ -99,7 +171,7 @@ jobs:
           apt-get update
           apt-get -y install git tree squashfs-tools xvfb x11-utils procps ffmpeg xterm liblcms2-dev libsqlite3-dev
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Bootstrap
         run: ./Library/Scripts/bootstrap.sh
@@ -109,6 +181,39 @@ jobs:
 
       - name: Build and install
         run: make install
+
+      - name: Run UI tests
+        run: sh Library/Scripts/run-uitests-debug.sh
+
+      # The JUnit report (build/test-results/junit.xml) is written by the
+      # uitest harness and copied out of the isolated session by run-uitests.sh.
+      - name: Upload UI test results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: junit-debian-x86_64
+          path: build/test-results/*
+          if-no-files-found: warn
+
+      # test-reporter runs git as root inside the container, but the workspace
+      # was cloned by the runner user (uid 1001) - git refuses to touch it
+      # ("dubious ownership"). --global is HOME-dependent and does not work in
+      # container runs, so use the --system scope (/etc/gitconfig). Must also
+      # run when the UI tests failed, hence the unconditional if: always().
+      - name: Mark workspace as a git safe.directory
+        if: always()
+        run: git config --system --add safe.directory "$GITHUB_WORKSPACE"
+
+      # Publish the JUnit report as a check run / PR annotation so the results
+      # are visible in the Actions UI without downloading the artifact.
+      - name: Publish UI test results
+        if: always()
+        uses: dorny/test-reporter@v3
+        with:
+          name: GNUstep UI tests (Debian)
+          path: build/test-results/junit.xml
+          reporter: java-junit
+          fail-on-error: true
 
       - name: Package
         run: |
@@ -123,7 +228,7 @@ jobs:
           cd artifacts/Debian/x86_64
           tree -h -D -C -H -./ --houtro=/dev/null -T 'Gershwin System for Debian x86_64' ./ > ./index.html
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: gershwin-debian-x86_64
           path: artifacts/Debian/x86_64
@@ -135,8 +240,12 @@ jobs:
     timeout-minutes: 240
     permissions:
       contents: read
+      actions: read
+      # checks: write was only needed by the dorny/test-reporter step below,
+      # which is disabled while the OpenBSD UI tests are switched off.
+      # checks: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Build inside OpenBSD VM
         uses: vmactions/openbsd-vm@v1
@@ -154,6 +263,12 @@ jobs:
             ./Library/Scripts/bootstrap.sh
             ./Library/Scripts/checkout.sh
             make install
+            # UI tests are currently disabled for OpenBSD (see the commented-out
+            # steps at the end of this job).
+            # set +e
+            # sh Library/Scripts/run-uitests-debug.sh
+            # UITEST_RC=$?
+            # set -e
             mkdir -p artifacts/OpenBSD/7.8/amd64
             # OpenBSD's base tar has no -J (xz); use -z (gzip), which it supports.
             tar -C / -czf artifacts/OpenBSD/7.8/amd64/system.tgz /System
@@ -164,9 +279,36 @@ jobs:
               > artifacts/OpenBSD/7.8/amd64/Gershwin-OpenBSD-${TIMESTAMP}.dependencies || true
             cd artifacts/OpenBSD/7.8/amd64
             tree -h -D -C -H -./ --houtro=/dev/null -T 'Gershwin System for OpenBSD 7.8 amd64' ./ > ./index.html || true
+            exit 0
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: gershwin-openbsd-78-amd64
           path: artifacts/OpenBSD/7.8/amd64
           if-no-files-found: error
+
+      # UI tests are disabled for OpenBSD for now. Re-enable by uncommenting
+      # the run-uitests-debug.sh call in the VM step above, and the two steps
+      # below (and the checks: write permission at the top of this job).
+
+      # The JUnit report (build/test-results/junit.xml) is written by the
+      # uitest harness and copied out of the VM by run-uitests.sh. Upload it
+      # so CI consumers can download it without scraping the log.
+      # - name: Upload UI test results
+      #   if: always()
+      #   uses: actions/upload-artifact@v6
+      #   with:
+      #     name: junit-openbsd-78-amd64
+      #     path: build/test-results/*
+      #     if-no-files-found: warn
+
+      # Publish the JUnit report as a check run / PR annotation so the results
+      # are visible in the Actions UI without downloading the artifact.
+      # - name: Publish UI test results
+      #   if: always()
+      #   uses: dorny/test-reporter@v3
+      #   with:
+      #     name: GNUstep UI tests (OpenBSD)
+      #     path: build/test-results/junit.xml
+      #     reporter: java-junit
+      #     fail-on-error: true

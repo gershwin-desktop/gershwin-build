@@ -27,6 +27,23 @@ SKIP_REPOS=$(printf '%s' "$SKIP_REPOS" | tr ',' ' ')
 # rollout works. Independent of PINNED: the pinned upstream libs don't carry
 # such a branch, so their pins are unaffected.
 BRANCH="${BRANCH:-}"
+
+# On GitHub Actions, prefer the dev branch automatically when the run is for
+# dev: the workflow's PR head branch, PR base branch, or the branch the run
+# was dispatched from is 'dev'.  This is what makes a "Dev" run test the dev
+# snapshots of the gershwin repos (which carry the uitests) without touching
+# the workflow.  An explicit BRANCH= still wins.
+if [ -z "$BRANCH" ]; then
+  for _ref in "${GITHUB_HEAD_REF:-}" "${GITHUB_BASE_REF:-}" "${GITHUB_REF#refs/heads/}"
+  do
+    if [ "$_ref" = "dev" ]; then
+      BRANCH=dev
+      echo "Detected a dev run; preferring the dev branch for Gershwin repos."
+      break
+    fi
+  done
+fi
+
 ON_BRANCH=""     # repos actually placed on $BRANCH (for the end-of-run summary)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -51,6 +68,7 @@ https://github.com/gershwin-desktop/gershwin-windowmanager.git
 https://github.com/gershwin-desktop/gershwin-components.git
 https://github.com/gershwin-desktop/gershwin-assets.git
 https://github.com/gershwin-desktop/docs.git
+https://github.com/gershwin-desktop/gershwin-desktop.wiki.git
 "
 
 # Pinned commits, as "<repo name> <commit>". These are upstream libraries; we pin

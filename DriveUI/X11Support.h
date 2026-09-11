@@ -1,0 +1,95 @@
+/*
+ * Copyright (c) 2026 Simon Peter
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
+#import <Foundation/Foundation.h>
+
+@interface X11Support : NSObject
+
+// Discovery
++ (NSArray *)windowList;
++ (NSDictionary *)windowInfo:(unsigned long)xid;
+
+// Input Simulation
++ (void)simulateMouseMoveTo:(NSPoint)point;
++ (void)simulateClick:(int)button; // 1=left, 2=middle, 3=right
++ (void)simulateKeyStroke:(NSString *)keyString;
+
+// Press button 1 at the current pointer position and drag by the given pixel
+// offset, releasing over the end position (moving windows, sliders,
+// scrollbars, drag-and-drop).
++ (void)simulateDragBy:(NSPoint)delta;
+
+// Emit `count` wheel steps at the current pointer position.  direction is one
+// of "up"/"down"/"left"/"right" (X buttons 4/5/6/7).
++ (void)simulateScrollWheel:(NSString *)direction count:(int)count;
+
+// Raise + focus a window so subsequent keyboard input is delivered to it rather
+// than an occluding window. Needed because the desktop usually has overlapping
+// windows.
++ (void)activateWindow:(unsigned long)xid;
+
+// Send a single key with zero or more modifiers held (e.g. Control+c, or just
+// Return) — for shortcuts and menu accelerators that plain text typing cannot
+// express. Modifier names: "control"/"ctrl", "alt"/"meta", "shift",
+// "super"/"win". The key is either a single character or an X keysym name such
+// as "Return", "Left" or "F5".
++ (void)simulateChordWithModifiers:(NSArray *)modifiers key:(NSString *)key;
+
+// Pixel height of screen 0, for converting GNUstep's bottom-origin screen
+// coordinates to X11's top-origin root coordinates before injecting input.
++ (int)screenHeight;
+
+// Pixel width of screen 0 (same origin convention as screenHeight).
++ (int)screenWidth;
+
+// Give the X input focus to a mapped window belonging to the given process, so
+// subsequently injected key events reach that application.  In a window-managed
+// desktop the target app is usually NOT the input-focus owner (focus often
+// stays on the terminal), and key injection needs the focus on the app for
+// GNUstep to route the events to its key window.
++ (void)setFocusToPID:(int)pid;
+
+// Find a top-level X window whose name contains `title` (case-insensitive).
+// Works for any app, GNUstep or not.  Only real application windows are
+// considered (mapped, not override-redirect, normal/dialog/utility type per
+// ICCCM/EWMH), so window-manager-internal windows are excluded.  Returns the
+// window id or 0.
++ (unsigned long)findWindowWithTitle:(NSString *)title;
+
+// Count the application windows (same filtering as findWindowWithTitle:)
+// whose name contains `title`.
++ (NSUInteger)countWindowsWithTitle:(NSString *)title;
+
+// Like findWindowWithTitle: but also matches viewable non-application windows
+// (e.g. the desktop); used when activating a window to switch focus.
++ (unsigned long)findViewableWindowWithTitle:(NSString *)title;
+
+// True if a windowInfo: dictionary describes a real top-level application
+// window (ICCCM/EWMH filter used by the whole-display scans).
++ (BOOL)isAppWindow:(NSDictionary *)info;
+
+// Resolve an application name to its process id the other way round from a
+// socket scan: GNUstep sets WM_CLASS res_class to the process name and
+// _NET_WM_PID to the process id on every window, so an app is found by
+// reading those off its window - no /tmp/driveui.*.sock probing, no
+// subprocess spawn, no 2s-per-wedged-socket stall.  Returns 0 when the app
+// has no window (a background daemon) or no EWMH-compliant window manager is
+// present; callers fall back to the socket scan then.
++ (int)pidForAppName:(NSString *)name;
+
+// True if the window identified by `xid` is the one _NET_ACTIVE_WINDOW points
+// at (i.e. the window manager considers it the focused/frontmost window).
+// Used by the UI tests to verify that an activation request actually took
+// effect, instead of assuming the WM honoured it.
++ (BOOL)isWindowActive:(unsigned long)xid;
+
+// Resolve the absolute path of an executable by name from the PATH
+// environment variable.  System helper tools (xdotool, ffmpeg, ...) live at
+// different paths per OS, so callers must not hardcode them; pass the bare
+// name and use the returned path (nil when the tool is not on PATH).
++ (NSString *)pathForExecutable:(NSString *)name;
+
+@end

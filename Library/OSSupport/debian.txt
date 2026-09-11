@@ -24,8 +24,6 @@ openssl
 freeglut3-dev
 libgif-dev
 libao-dev
-xfonts-75dpi
-xfonts-75dpi
 libc6-dev
 libcurl4-openssl-dev
 libdbus-1-dev
@@ -67,3 +65,4 @@ libavdevice-dev
 libao-dev
 libsndfile1-dev
 libsqlite3-dev
+xdotool

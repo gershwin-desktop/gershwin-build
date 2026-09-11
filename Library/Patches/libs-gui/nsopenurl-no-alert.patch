@@ -1,0 +1,15 @@
+diff --git a/Source/NSWorkspace.m b/Source/NSWorkspace.m
+index 274ffb447..bf473e9b6 100644
+--- a/Source/NSWorkspace.m
++++ b/Source/NSWorkspace.m
+@@ -1137,10 +1137,6 @@ static NSDictionary		*urlPreferences = nil;
+         }
+       else
+         {
+-	  NSRunAlertPanel(nil,
+-	    @"Unable to use Application or Service to open URL",
+-	    @"Continue", nil, nil);
+-
+           if ([self _openUnknown: [url absoluteString]])
+ 	    {
+ 	      [NSApp deactivate];

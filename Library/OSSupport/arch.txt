@@ -22,8 +22,6 @@ openssl
 freeglut
 giflib
 libao
-xorg-fonts-type1
-xorg-fonts-75dpi
 dbus
 libxcb
 xcb-util-cursor
@@ -38,3 +36,4 @@ automake
 libtool
 ffmpeg
 sqlite
+xdotool

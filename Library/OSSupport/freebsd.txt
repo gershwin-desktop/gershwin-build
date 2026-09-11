@@ -18,7 +18,6 @@ openssl
 freeglut
 giflib
 libao
-xorg-fonts-truetype
 dbus
 mDNSResponder
 libxcb
@@ -41,3 +40,4 @@ libvncserver
 freerdp
 ffmpeg
 sqlite3
+xdotool

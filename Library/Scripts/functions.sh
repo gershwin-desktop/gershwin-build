@@ -33,6 +33,13 @@ detect_platform() {
                 PLATFORM="debian"
                 MAKE_CMD="make"
                 NPROC_CMD="nproc"
+            elif [ "$([ -f /etc/os-release ] && . /etc/os-release && echo "$ID")" = "void" ]; then
+                # Void ships no marker file of its own, so key off os-release
+                # like bootstrap.sh does. Sourcing in a subshell keeps the
+                # quoting in ID="void" from leaking into the comparison.
+                PLATFORM="void"
+                MAKE_CMD="make"
+                NPROC_CMD="nproc"
             else
                 echo "Unsupported Linux distribution"
                 exit 1

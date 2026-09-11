@@ -147,6 +147,24 @@ case "$OS_ID" in
     fi
     ;;
 
+  void)
+    while IFS= read -r pkg || [ -n "$pkg" ]; do
+      [ -z "$pkg" ] && continue
+      # A local query is the only reliable installed-check here: "xbps-query -Rs"
+      # searches the repositories and exits 0 even for a name that does not exist.
+      if ! xbps-query "$pkg" >/dev/null 2>&1; then
+        missing="$missing $pkg"
+      fi
+    done < "$REQUIREMENTS_FILE"
+
+    if [ -n "$missing" ]; then
+      echo "Installing:$missing"
+      xbps-install -Sy $missing
+    else
+      echo "All required packages are already installed."
+    fi
+    ;;
+
   *)
     echo "Unsupported OS for package checking: $OS_ID"
     exit 1

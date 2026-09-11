@@ -11,6 +11,7 @@ This is intended for Gershwin developers only.  For more stable packaging with a
 * Artix (Arch Linux without systemd)
 * Debian
 * Devuan (Debian without systemd)
+* Void Linux (runit)
 
 ## Requirements for building
 
